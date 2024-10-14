@@ -144,7 +144,7 @@ signing {
 
 protobuf {
     protoc {
-        artifact = "com.google.protobuf:protoc:3.25.3"
+        artifact = "com.google.protobuf:protoc:4.28.2"
     }
     plugins {
         create("grpc") {
