@@ -3,7 +3,7 @@ plugins {
     `java-library`
     application
     jacoco
-    id("com.diffplug.spotless") version "6.20.0"
+    id("com.diffplug.spotless") version "6.25.0"
     id("com.google.protobuf") version "0.9.4"
     id("com.google.cloud.tools.jib") version "3.4.3"
     id("com.gradleup.shadow") version "8.3.3"
