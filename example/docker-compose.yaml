@@ -1,0 +1,55 @@
+version: "3"
+services:
+  jobmanager:
+    image: flink:1.19.1-java17
+    container_name: jobmanager
+    ports:
+      - "8081:8081"
+    command: jobmanager
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081"]
+      interval: 1s
+      retries: 30
+    volumes:
+      - ./build/libs/example-all.jar:/opt/flink/lib/flink-connector-grpc.jar
+    environment:
+     - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager
+
+  taskmanager:
+    image: flink:1.19.1-java17
+    container_name: taskmanager
+    depends_on:
+      jobmanager:
+        condition: service_healthy
+      grpc-server:
+        condition: service_started
+    command: taskmanager
+    scale: 1
+    volumes:
+      - ./build/libs/example-all.jar:/opt/flink/lib/flink-connector-grpc.jar
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager
+        taskmanager.numberOfTaskSlots: 2
+
+  grpc-server:
+    image: example-grpc-server
+    container_name: grpc-server
+
+  sql-client:
+    image: flink:1.19.1-java17
+    container_name: sql-client
+    command: bin/sql-client.sh
+    depends_on:
+      - jobmanager
+      - taskmanager
+    volumes:
+      - ./build/libs/example-all.jar:/opt/flink/lib/flink-connector-grpc.jar
+      - ./build/container_logs/sql-client/:/opt/flink/log
+    environment:
+        FLINK_PROPERTIES: |
+          jobmanager.rpc.address: jobmanager
+          rest.address: jobmanager
