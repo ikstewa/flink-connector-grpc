@@ -53,8 +53,8 @@ dependencies {
     testImplementation("org.apache.flink:flink-test-utils:$flinkVersion")
     testImplementation("org.apache.flink:flink-protobuf:$flinkVersion")
 
-    testImplementation("com.google.truth.extensions:truth-java8-extension:1.1.5")
-    testImplementation("com.google.truth:truth:1.1.5")
+    testImplementation("com.google.truth.extensions:truth-java8-extension:1.4.4")
+    testImplementation("com.google.truth:truth:1.4.4")
 
 }
 
