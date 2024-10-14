@@ -4,6 +4,7 @@ plugins {
     `maven-publish`
     signing
     id("com.diffplug.spotless") version "6.20.0"
+    id("com.google.protobuf") version "0.9.4"
 }
 
 java {
@@ -46,6 +47,12 @@ dependencies {
     testImplementation("org.apache.logging.log4j:log4j-jpl")
     testImplementation("org.apache.logging.log4j:log4j-jul")
 
+    testImplementation("org.apache.flink:flink-core:$flinkVersion")
+    testImplementation("org.apache.flink:flink-table-common:$flinkVersion")
+    testImplementation("org.apache.flink:flink-table-test-utils:$flinkVersion")
+    testImplementation("org.apache.flink:flink-test-utils:$flinkVersion")
+    testImplementation("org.apache.flink:flink-protobuf:$flinkVersion")
+
     testImplementation("com.google.truth.extensions:truth-java8-extension:1.1.5")
     testImplementation("com.google.truth:truth:1.1.5")
 
@@ -55,6 +62,15 @@ testing {
     suites {
         val test by getting(JvmTestSuite::class) {
             useJUnitJupiter()
+            targets {
+                all {
+                    testTask.configure {
+                      testLogging {
+                       showStandardStreams = true
+                      }
+                    }
+                }
+            }
         }
     }
 }
@@ -81,6 +97,7 @@ spotless {
 
     // chose the Google java formatter, version 1.9
     java {
+        targetExclude("**/build/generated/**")
         importOrder()
         removeUnusedImports()
         googleJavaFormat()
@@ -123,4 +140,22 @@ publishing {
 
 signing {
     sign(publishing.publications["mavenJava"])
+}
+
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:3.25.3"
+    }
+    plugins {
+        create("grpc") {
+            artifact = "io.grpc:protoc-gen-grpc-java:1.68.0"
+        }
+    }
+    generateProtoTasks {
+        ofSourceSet("test").forEach {
+            it.plugins {
+                create("grpc") { }
+            }
+        }
+    }
 }
