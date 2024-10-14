@@ -28,7 +28,7 @@ repositories {
 val flinkLib by configurations.creating
 val flinkVersion: String by rootProject.extra
 dependencies {
-    api(platform("org.apache.logging.log4j:log4j-bom:2.20.0"))
+    api(platform("org.apache.logging.log4j:log4j-bom:2.24.1"))
     api(platform("io.grpc:grpc-bom:1.68.0"))
 
     implementation("javax.annotation:javax.annotation-api:1.3.2")
