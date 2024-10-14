@@ -82,3 +82,9 @@ FROM NamedEvents AS E
 ```
 
 The columns specified as the `PIMARY KEY` and used for the JOIN `ON` condition will be converted to the configured proto `request` object.
+
+# Development
+
+## Publish
+To publish a new release:
+`./gradlew publishToSonatype closeAndReleaseSonatypeStagingRepository`
