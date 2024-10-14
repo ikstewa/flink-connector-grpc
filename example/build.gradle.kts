@@ -35,7 +35,6 @@ dependencies {
     implementation("io.grpc:grpc-protobuf")
     implementation("io.grpc:grpc-services")
     implementation("io.grpc:grpc-netty-shaded")
-    // implementation("com.google.code.gson:gson:2.11.0")
 
     flinkLib(project(":flink-connector-grpc"))
     flinkLib("org.apache.logging.log4j:log4j-core")
@@ -63,28 +62,4 @@ protobuf {
 tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
   mergeServiceFiles()
   configurations = listOf(flinkLib)
-}
-
-// task initConfig(type: Copy) {
-//     from('src/main/config') {
-//         include '**/*.properties'
-//         include '**/*.xml'
-//         filter(ReplaceTokens, tokens: [version: '2.3.1'])
-//     }
-//     from('src/main/config') {
-//         exclude '**/*.properties', '**/*.xml'
-//     }
-//     from('src/main/languages') {
-//         rename 'EN_US_(.*)', '$1'
-//     }
-//     into 'build/target/config'
-//     exclude '**/*.bak'
-//
-//     includeEmptyDirs = false
-//
-//     with dataContent
-// }
-tasks.register<Copy>("copyFlinkLibs") {
-    from(flinkLib) // Source directory
-    into("build/flinkLibs") // Destination directory
 }
