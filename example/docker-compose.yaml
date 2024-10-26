@@ -1,4 +1,3 @@
-version: "3"
 services:
   jobmanager:
     image: flink:1.19.1-java17
