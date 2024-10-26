@@ -34,7 +34,7 @@ dependencies {
     implementation("io.grpc:grpc-netty-shaded")
     implementation("com.google.code.gson:gson:2.11.0")
     implementation("com.google.auto.service:auto-service-annotations:1.1.1")
-
+    implementation("org.apache.flink:flink-protobuf:$flinkVersion")
 
     compileOnly("org.apache.flink:flink-table-api-java:$flinkVersion")
 

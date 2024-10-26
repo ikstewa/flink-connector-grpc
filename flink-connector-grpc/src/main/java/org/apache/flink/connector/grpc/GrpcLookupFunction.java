@@ -18,7 +18,7 @@ package org.apache.flink.connector.grpc;
 import com.google.common.io.ByteStreams;
 import com.google.gson.Gson;
 import io.grpc.CallOptions;
-import io.grpc.Channel;
+import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
@@ -31,6 +31,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.serialization.SerializationSchema;
@@ -40,7 +41,7 @@ import org.apache.flink.table.functions.FunctionContext;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-class GrpcLookupFunction extends AsyncLookupFunction {
+public class GrpcLookupFunction extends AsyncLookupFunction {
 
   private static final Logger LOG = LogManager.getLogger(GrpcLookupFunction.class);
   private static final String RETRY_SERVICE_CONFIG =
@@ -69,7 +70,7 @@ class GrpcLookupFunction extends AsyncLookupFunction {
   private final DeserializationSchema<RowData> responseSchema;
   private final ResultRowBuilder resultBuilder;
 
-  private transient Channel channel;
+  private transient ManagedChannel channel;
   private transient MethodDescriptor<RowData, RowData> grpcService;
   private transient AtomicInteger grpcCallCounter;
   private transient AtomicInteger grpcErrorCounter;
@@ -130,6 +131,12 @@ class GrpcLookupFunction extends AsyncLookupFunction {
     context
         .getMetricGroup()
         .gauge("grpc-table-lookup-call-error", () -> grpcErrorCounter.intValue());
+  }
+
+  @Override
+  public void close() throws Exception {
+    this.channel.shutdown();
+    this.channel.awaitTermination(10L, TimeUnit.SECONDS);
   }
 
   @Override
