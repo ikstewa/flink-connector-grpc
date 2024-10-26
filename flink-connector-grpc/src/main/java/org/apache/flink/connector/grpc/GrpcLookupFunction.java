@@ -40,7 +40,7 @@ import org.apache.flink.table.functions.FunctionContext;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-class GrpcLookupFunction extends AsyncLookupFunction {
+public class GrpcLookupFunction extends AsyncLookupFunction {
 
   private static final Logger LOG = LogManager.getLogger(GrpcLookupFunction.class);
   private static final String RETRY_SERVICE_CONFIG =
