@@ -11,7 +11,7 @@ The primary use case for the gRPC connector is to be used in a [Lookup Join](htt
 
 * Sink - Add Table Sink support to egress via gRPC
 * Auth - Currently assuming internal private networks
-* Remove `{request,response}.protobuf.message-class-name` - load from method
+* GRPC Retry Policy - Better customization of the GRPC retry policy
 
 ## Example Usage
 
@@ -59,15 +59,7 @@ CREATE TABLE Greeter (
   'host' = 'grpc-server',
   'port' = '50051',
   'use-plain-text' = 'true',
-  'lookup.max-retries' = '10',
-  'lookup.cache' = 'PARTIAL',
-  'lookup.partial-cache.expire-after-write' = '1h',
-  'lookup.partial-cache.max-rows' = '1000',
-  'grpc-method-name' = 'helloworld.Greeter/SayHello',
-  'request.format' = 'protobuf',
-  'request.protobuf.message-class-name' = 'io.grpc.examples.helloworld.HelloRequest',
-  'response.format' = 'protobuf',
-  'response.protobuf.message-class-name' = 'io.grpc.examples.helloworld.HelloReply'
+  'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod'
 );
 ```
 
@@ -82,6 +74,47 @@ FROM NamedEvents AS E
 ```
 
 The columns specified as the `PIMARY KEY` and used for the JOIN `ON` condition will be converted to the configured proto `request` object.
+
+### Advanced Config
+
+Lookup cache can be enabled and configured using standard config:
+https://nightlies.apache.org/flink/flink-docs-release-1.19/docs/connectors/table/jdbc/#lookup-cache-1
+
+```roomsql
+CREATE TABLE Greeter (
+  message STRING,
+  name STRING
+) WITH (
+  'connector' = 'grpc-lookup',
+  'host' = 'grpc-server',
+  'port' = '50051',
+  'use-plain-text' = 'true',
+  'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod',
+  'lookup.max-retries' = '10',
+  'lookup.cache' = 'PARTIAL',
+  'lookup.partial-cache.expire-after-write' = '1h',
+  'lookup.partial-cache.max-rows' = '1000'
+);
+```
+
+The GRPC service method can be configured directly:
+
+```roomsql
+CREATE TABLE Greeter (
+  message STRING,
+  name STRING
+) WITH (
+  'connector' = 'grpc-lookup',
+  'host' = 'grpc-server',
+  'port' = '50051',
+  'use-plain-text' = 'true',
+  'grpc-method-name' = 'helloworld.Greeter/SayHello',
+  'request.format' = 'protobuf',
+  'request.protobuf.message-class-name' = 'io.grpc.examples.helloworld.HelloRequest',
+  'response.format' = 'protobuf',
+  'response.protobuf.message-class-name' = 'io.grpc.examples.helloworld.HelloReply'
+);
+```
 
 # Development
 

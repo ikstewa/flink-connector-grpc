@@ -30,6 +30,7 @@ import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.test.util.MiniClusterWithClientResource;
 import org.apache.flink.types.Row;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -56,9 +57,65 @@ class GrpcLookupJoinTest {
             .start();
   }
 
+  @AfterAll
+  static void teardownCluster() throws IOException {
+    grpcServer.shutdownNow();
+  }
+
   @Test
   @DisplayName("Can perform lookup join")
-  void testMultisetKeys() {
+  void testLookupJoin() {
+    final EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
+    final TableEnvironment env = TableEnvironment.create(settings);
+
+    env.executeSql(
+        """
+      CREATE TABLE input_data (
+        name STRING,
+        proc_time AS PROCTIME()
+      ) WITH (
+        'connector' = 'datagen',
+        'number-of-rows' = '5',
+        'fields.name.kind' = 'sequence',
+        'fields.name.start' = '1',
+        'fields.name.end' = '10'
+      );""");
+    env.executeSql(
+        """
+      CREATE TABLE Greeter (
+        message STRING,
+        name STRING
+      ) WITH (
+        'connector' = 'grpc-lookup',
+        'host' = 'localhost',
+        'port' = '50051',
+        'use-plain-text' = 'true',
+        'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod'
+      );""");
+
+    final var sql =
+        """
+        SELECT
+          E.name as name,
+          G.message as message
+        FROM input_data AS E
+          JOIN Greeter FOR SYSTEM_TIME AS OF E.proc_time AS G
+            ON E.name = G.name;""";
+
+    final var results = ImmutableList.copyOf(env.executeSql(sql).collect());
+
+    Truth.assertThat(results)
+        .containsExactly(
+            Row.of("1", "Hello 1"),
+            Row.of("2", "Hello 2"),
+            Row.of("3", "Hello 3"),
+            Row.of("4", "Hello 4"),
+            Row.of("5", "Hello 5"));
+  }
+
+  @Test
+  @DisplayName("Advanced configuration")
+  void testAdvancedConfiguration() {
     final EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
     final TableEnvironment env = TableEnvironment.create(settings);
 

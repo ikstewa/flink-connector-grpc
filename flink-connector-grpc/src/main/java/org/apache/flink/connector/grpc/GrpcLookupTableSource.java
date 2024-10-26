@@ -24,6 +24,7 @@ import javax.annotation.Nullable;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.serialization.SerializationSchema;
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.connector.Projection;
 import org.apache.flink.table.connector.format.DecodingFormat;
 import org.apache.flink.table.connector.format.EncodingFormat;
@@ -80,10 +81,20 @@ class GrpcLookupTableSource
   public LookupRuntimeProvider getLookupRuntimeProvider(LookupContext lookupContext) {
     final var rowDef = createMappings(this.physicalRowDataType, lookupContext.getKeys());
 
-    final var requestSchemaEncoder =
-        this.requestFormat.createRuntimeEncoder(null, rowDef.requestRow());
-    final var responseSchemaDecoder =
-        this.responseFormat.createRuntimeDecoder(lookupContext, rowDef.responseRow());
+    final SerializationSchema<RowData> requestSchemaEncoder;
+    try {
+      requestSchemaEncoder = this.requestFormat.createRuntimeEncoder(null, rowDef.requestRow());
+    } catch (ValidationException e) {
+      throw new ValidationException("Failed to create GRPC request encoder.", e);
+    }
+
+    final DeserializationSchema<RowData> responseSchemaDecoder;
+    try {
+      responseSchemaDecoder =
+          this.responseFormat.createRuntimeDecoder(lookupContext, rowDef.responseRow());
+    } catch (ValidationException e) {
+      throw new ValidationException("Failed to create GRPC response encoder.", e);
+    }
 
     final var lookupFunc =
         new GrpcLookupFunction(

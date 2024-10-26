@@ -18,20 +18,16 @@ package org.apache.flink.connector.grpc;
 import static org.apache.flink.table.factories.FactoryUtil.createTableFactoryHelper;
 
 import com.google.auto.service.AutoService;
-import java.util.HashSet;
 import java.util.Set;
 import javax.annotation.Nullable;
-import org.apache.flink.api.common.serialization.DeserializationSchema;
-import org.apache.flink.api.common.serialization.SerializationSchema;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ReadableConfig;
-import org.apache.flink.table.connector.format.DecodingFormat;
-import org.apache.flink.table.connector.format.EncodingFormat;
+import org.apache.flink.connector.grpc.util.MethodDescriptorUtils;
+import org.apache.flink.connector.grpc.util.MethodDescriptorUtils.FlinkMethodDescriptor;
 import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.connector.source.lookup.LookupOptions;
 import org.apache.flink.table.connector.source.lookup.cache.DefaultLookupCache;
 import org.apache.flink.table.connector.source.lookup.cache.LookupCache;
-import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.factories.DeserializationFormatFactory;
 import org.apache.flink.table.factories.DynamicTableSourceFactory;
 import org.apache.flink.table.factories.Factory;
@@ -48,19 +44,17 @@ public class GrpcLookupTableSourceFactory implements DynamicTableSourceFactory {
 
   @Override
   public Set<ConfigOption<?>> requiredOptions() {
-    final Set<ConfigOption<?>> options = new HashSet<>();
-    options.add(GrpcConnectorOptions.HOST);
-    options.add(GrpcConnectorOptions.PORT);
-    options.add(GrpcConnectorOptions.RPC_METHOD);
-    options.add(GrpcConnectorOptions.REQUEST_FORMAT);
-    options.add(GrpcConnectorOptions.RESPONSE_FORMAT);
-    return options;
+    return Set.of(GrpcConnectorOptions.HOST, GrpcConnectorOptions.PORT);
   }
 
   @Override
   public Set<ConfigOption<?>> optionalOptions() {
     return Set.of(
         GrpcConnectorOptions.PLAIN_TEXT,
+        GrpcConnectorOptions.RPC_METHOD_DESC,
+        GrpcConnectorOptions.RPC_METHOD,
+        GrpcConnectorOptions.REQUEST_FORMAT,
+        GrpcConnectorOptions.RESPONSE_FORMAT,
         LookupOptions.CACHE_TYPE,
         LookupOptions.PARTIAL_CACHE_EXPIRE_AFTER_ACCESS,
         LookupOptions.PARTIAL_CACHE_EXPIRE_AFTER_WRITE,
@@ -79,12 +73,9 @@ public class GrpcLookupTableSourceFactory implements DynamicTableSourceFactory {
     final TableFactoryHelper helper = createTableFactoryHelper(this, context);
     final ReadableConfig tableOptions = helper.getOptions();
 
-    final DecodingFormat<DeserializationSchema<RowData>> decodingFormat =
-        helper.discoverDecodingFormat(
-            DeserializationFormatFactory.class, GrpcConnectorOptions.RESPONSE_FORMAT);
-    final EncodingFormat<SerializationSchema<RowData>> encodingFormat =
-        helper.discoverEncodingFormat(
-            SerializationFormatFactory.class, GrpcConnectorOptions.REQUEST_FORMAT);
+    validateSourceOptions(tableOptions);
+
+    final var desc = parseDescriptorOptions(tableOptions, helper);
 
     // validate all options
     helper.validate();
@@ -94,12 +85,54 @@ public class GrpcLookupTableSourceFactory implements DynamicTableSourceFactory {
             tableOptions.get(GrpcConnectorOptions.HOST),
             tableOptions.get(GrpcConnectorOptions.PORT),
             tableOptions.get(GrpcConnectorOptions.PLAIN_TEXT),
-            tableOptions.get(GrpcConnectorOptions.RPC_METHOD),
+            desc.serviceMethodName(),
             tableOptions.get(LookupOptions.MAX_RETRIES)),
         context.getPhysicalRowDataType(),
-        encodingFormat,
-        decodingFormat,
+        desc.requestEncoder(),
+        desc.responseDecoder(),
         getLookupCache(tableOptions));
+  }
+
+  protected void validateSourceOptions(ReadableConfig tableOptions)
+      throws IllegalArgumentException {
+    // Ensure that one of method name or descriptor is provided
+    final var methodOpt = tableOptions.getOptional(GrpcConnectorOptions.RPC_METHOD);
+    final var descOpt = tableOptions.getOptional(GrpcConnectorOptions.RPC_METHOD_DESC);
+
+    if (!(methodOpt.isEmpty() ^ descOpt.isEmpty())) {
+      throw new IllegalArgumentException(
+          String.format(
+              "Required only one of '%s' or '%s'",
+              GrpcConnectorOptions.RPC_METHOD.key(), GrpcConnectorOptions.RPC_METHOD_DESC.key()));
+    }
+
+    if (methodOpt.isPresent()) {
+      // Format is required when configuring using method
+      if (tableOptions.getOptional(GrpcConnectorOptions.REQUEST_FORMAT).isEmpty()
+          || tableOptions.getOptional(GrpcConnectorOptions.RESPONSE_FORMAT).isEmpty()) {
+        throw new IllegalArgumentException(
+            String.format(
+                "Config options '%s' and '%s' are required, if '%s' is configured.",
+                GrpcConnectorOptions.REQUEST_FORMAT,
+                GrpcConnectorOptions.RESPONSE_FORMAT,
+                GrpcConnectorOptions.RPC_METHOD));
+      }
+    }
+  }
+
+  protected FlinkMethodDescriptor parseDescriptorOptions(
+      ReadableConfig tableOptions, TableFactoryHelper helper) {
+    if (tableOptions.getOptional(GrpcConnectorOptions.RPC_METHOD).isPresent()) {
+      return new FlinkMethodDescriptor(
+          tableOptions.get(GrpcConnectorOptions.RPC_METHOD),
+          helper.discoverDecodingFormat(
+              DeserializationFormatFactory.class, GrpcConnectorOptions.RESPONSE_FORMAT),
+          helper.discoverEncodingFormat(
+              SerializationFormatFactory.class, GrpcConnectorOptions.REQUEST_FORMAT));
+    } else {
+      return MethodDescriptorUtils.parseMethodDescriptor(
+          tableOptions.get(GrpcConnectorOptions.RPC_METHOD_DESC));
+    }
   }
 
   @Nullable

@@ -45,6 +45,14 @@ public final class GrpcConnectorOptions {
               "The fully qualified name of the GRPC method. "
                   + "See: io.grpc.MethodDescriptor.getFullMethodName() or io.grpc.stub.annotations.RpcMethod.fullMethodName()");
 
+  public static final ConfigOption<String> RPC_METHOD_DESC =
+      ConfigOptions.key("grpc-method-desc")
+          .stringType()
+          .noDefaultValue()
+          .withDescription(
+              "Fully qualified reference to a static method for retrieving a MethodDescriptor. "
+                  + " Example: 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod'.");
+
   // --------------------------------------------------------------------------------------------
   // Format options
   // --------------------------------------------------------------------------------------------
