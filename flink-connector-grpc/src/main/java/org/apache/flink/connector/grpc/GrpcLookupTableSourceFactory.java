@@ -113,9 +113,9 @@ public class GrpcLookupTableSourceFactory implements DynamicTableSourceFactory {
         throw new IllegalArgumentException(
             String.format(
                 "Config options '%s' and '%s' are required, if '%s' is configured.",
-                GrpcConnectorOptions.REQUEST_FORMAT,
-                GrpcConnectorOptions.RESPONSE_FORMAT,
-                GrpcConnectorOptions.RPC_METHOD));
+                GrpcConnectorOptions.REQUEST_FORMAT.key(),
+                GrpcConnectorOptions.RESPONSE_FORMAT.key(),
+                GrpcConnectorOptions.RPC_METHOD.key()));
       }
     }
   }

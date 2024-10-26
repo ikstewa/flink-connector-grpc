@@ -28,9 +28,11 @@ import java.io.IOException;
 import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
+import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.test.util.MiniClusterWithClientResource;
 import org.apache.flink.types.Row;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -170,6 +172,100 @@ class GrpcLookupJoinTest {
             Row.of("3", "Hello 3"),
             Row.of("4", "Hello 4"),
             Row.of("5", "Hello 5"));
+  }
+
+  @Test
+  @DisplayName("Fails when both grpc-method config is defined")
+  void testGrpcMethod() {
+    final EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
+    final TableEnvironment env = TableEnvironment.create(settings);
+
+    env.executeSql(
+        """
+      CREATE TABLE input_data (
+        name STRING,
+        proc_time AS PROCTIME()
+      ) WITH (
+        'connector' = 'datagen',
+        'number-of-rows' = '5',
+        'fields.name.kind' = 'sequence',
+        'fields.name.start' = '1',
+        'fields.name.end' = '10'
+      );""");
+    env.executeSql(
+        """
+      CREATE TABLE Greeter (
+        message STRING,
+        name STRING
+      ) WITH (
+        'connector' = 'grpc-lookup',
+        'host' = 'localhost',
+        'port' = '50051',
+        'use-plain-text' = 'true',
+        'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod',
+        'grpc-method-name' = 'helloworld.Greeter/SayHello'
+      );""");
+
+    final var sql =
+        """
+        SELECT
+          E.name as name,
+          G.message as message
+        FROM input_data AS E
+          JOIN Greeter FOR SYSTEM_TIME AS OF E.proc_time AS G
+            ON E.name = G.name;""";
+
+    final Exception error =
+        Assertions.assertThrows(ValidationException.class, () -> env.executeSql(sql));
+    Truth.assertThat(error.getCause().getMessage())
+        .isEqualTo("Required only one of 'grpc-method-name' or 'grpc-method-desc'");
+  }
+
+  @Test
+  @DisplayName("Fails when both grpc-method-name format missing")
+  void testGrpcMethodNameFormat() {
+    final EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
+    final TableEnvironment env = TableEnvironment.create(settings);
+
+    env.executeSql(
+        """
+      CREATE TABLE input_data (
+        name STRING,
+        proc_time AS PROCTIME()
+      ) WITH (
+        'connector' = 'datagen',
+        'number-of-rows' = '5',
+        'fields.name.kind' = 'sequence',
+        'fields.name.start' = '1',
+        'fields.name.end' = '10'
+      );""");
+    env.executeSql(
+        """
+      CREATE TABLE Greeter (
+        message STRING,
+        name STRING
+      ) WITH (
+        'connector' = 'grpc-lookup',
+        'host' = 'localhost',
+        'port' = '50051',
+        'use-plain-text' = 'true',
+        'grpc-method-name' = 'helloworld.Greeter/SayHello'
+      );""");
+
+    final var sql =
+        """
+        SELECT
+          E.name as name,
+          G.message as message
+        FROM input_data AS E
+          JOIN Greeter FOR SYSTEM_TIME AS OF E.proc_time AS G
+            ON E.name = G.name;""";
+
+    final Exception error =
+        Assertions.assertThrows(ValidationException.class, () -> env.executeSql(sql));
+    Truth.assertThat(error.getCause().getMessage())
+        .isEqualTo(
+            "Config options 'request.format' and 'response.format' are required, if 'grpc-method-name' is configured.");
   }
 
   static class GreeterImpl extends GreeterGrpc.GreeterImplBase {
