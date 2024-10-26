@@ -82,6 +82,7 @@ class GrpcLookupTableSource
 
     final var requestSchemaEncoder =
         this.requestFormat.createRuntimeEncoder(null, rowDef.requestRow());
+
     final var responseSchemaDecoder =
         this.responseFormat.createRuntimeDecoder(lookupContext, rowDef.responseRow());
 
