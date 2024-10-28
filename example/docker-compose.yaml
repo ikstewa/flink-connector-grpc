@@ -37,6 +37,9 @@ services:
   grpc-server:
     image: example-grpc-server
     container_name: grpc-server
+    command: file:///opt/mock_grpc_service.pkl
+    volumes:
+      - ./build/resources/main/mock_grpc_service.pkl:/opt/mock_grpc_service.pkl
 
   sql-client:
     image: flink:1.19.1-java17

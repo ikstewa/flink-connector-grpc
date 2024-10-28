@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import org.gradle.api.tasks.testing.logging.TestLogEvent
 plugins {
     `java-library`
     jacoco
@@ -5,6 +7,7 @@ plugins {
     signing
     id("com.diffplug.spotless") version "6.25.0"
     id("com.google.protobuf") version "0.9.4"
+    id("org.pkl-lang") version("0.26.2")
 }
 
 java {
@@ -19,44 +22,25 @@ repositories {
     mavenCentral()
 }
 
-val flinkVersion: String by rootProject.extra
 dependencies {
     api(platform("org.apache.logging.log4j:log4j-bom:2.24.1"))
     api(platform("io.grpc:grpc-bom:1.68.0"))
+    api(platform("com.google.protobuf:protobuf-bom:3.25.3"))
 
-    implementation("com.google.code.findbugs:jsr305:3.0.2")
-
+    implementation("org.pkl-lang:pkl-config-java:0.26.2")
 
     implementation("org.apache.logging.log4j:log4j-api")
-    implementation("javax.annotation:javax.annotation-api:1.3.2")
 
     implementation("io.grpc:grpc-protobuf")
     implementation("io.grpc:grpc-services")
     implementation("io.grpc:grpc-netty-shaded")
-    implementation("com.google.code.gson:gson:2.11.0")
-    implementation("com.google.auto.service:auto-service-annotations:1.1.1")
-    implementation("org.apache.flink:flink-protobuf:$flinkVersion")
+    implementation("com.google.protobuf:protobuf-java-util")
 
-    compileOnly("org.apache.flink:flink-table-api-java:$flinkVersion")
-
-    annotationProcessor("com.google.auto.service:auto-service:1.1.1")
+    implementation("com.dashjoin:jsonata:0.9.8")
 
     testImplementation("org.apache.logging.log4j:log4j-core")
-    testImplementation("org.apache.logging.log4j:log4j-slf4j-impl")
-    testImplementation("org.apache.logging.log4j:log4j-slf4j2-impl")
-    testImplementation("org.apache.logging.log4j:log4j-jcl")
-    testImplementation("org.apache.logging.log4j:log4j-jpl")
-    testImplementation("org.apache.logging.log4j:log4j-jul")
-
-    testImplementation("org.apache.flink:flink-core:$flinkVersion")
-    testImplementation("org.apache.flink:flink-table-common:$flinkVersion")
-    testImplementation("org.apache.flink:flink-table-test-utils:$flinkVersion")
-    testImplementation("org.apache.flink:flink-test-utils:$flinkVersion")
-    testImplementation("org.apache.flink:flink-protobuf:$flinkVersion")
-
-    testImplementation("com.google.truth.extensions:truth-java8-extension:1.4.4")
+    testImplementation("javax.annotation:javax.annotation-api:1.3.2")
     testImplementation("com.google.truth:truth:1.4.4")
-
 }
 
 testing {
@@ -68,6 +52,20 @@ testing {
                     testTask.configure {
                       testLogging {
                        showStandardStreams = true
+                       showExceptions = true
+                       showCauses = true
+                       showStackTraces = true
+                       exceptionFormat = TestExceptionFormat.FULL
+                       showStandardStreams = false
+                       events =
+                           setOf(
+                               TestLogEvent.STANDARD_OUT,
+                               TestLogEvent.STANDARD_ERROR,
+                               TestLogEvent.STARTED,
+                               TestLogEvent.PASSED,
+                               TestLogEvent.SKIPPED,
+                               TestLogEvent.FAILED,
+                           )
                       }
                     }
                 }
@@ -108,13 +106,22 @@ spotless {
     }
 }
 
+pkl {
+  javaCodeGenerators {
+    register("configClasses") {
+      sourceModules.set(files("src/main/resources/MockServer.pkl"))
+      generateJavadoc.set(true)
+    }
+  }
+}
+
 publishing {
     publications {
         create<MavenPublication>("mavenJava") {
             from(components["java"])
             pom {
-                name.set("Flink GRPC Connector")
-                description.set("Flink connectors for GRPC services.")
+                name.set("Mock GRPC Server")
+                description.set("GRPC Server used for mocking multiple rpc services.")
                 url.set("https://github.com/ikstewa/flink-connector-grpc/")
                 licenses {
                     license {

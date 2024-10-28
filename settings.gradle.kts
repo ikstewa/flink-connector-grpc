@@ -5,3 +5,4 @@
 rootProject.name = "flink-connector-grpc"
 include("flink-connector-grpc")
 include("example")
+include("mock-rpc-server")

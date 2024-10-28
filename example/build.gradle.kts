@@ -16,9 +16,11 @@ java {
 }
 
 application {
-    mainClass = "org.apache.examples.helloworld.HelloWorldServer"
+    mainClass = "io.mock.grpc.MockJsonRpcServer"
 }
 jib.to.image = "example-grpc-server"
+jib.container.mainClass = application.mainClass.get()
+
 
 repositories {
     mavenCentral()
@@ -31,14 +33,39 @@ dependencies {
     api(platform("org.apache.logging.log4j:log4j-bom:2.24.1"))
     api(platform("io.grpc:grpc-bom:1.68.0"))
 
-    implementation("javax.annotation:javax.annotation-api:1.3.2")
-    implementation("io.grpc:grpc-protobuf")
-    implementation("io.grpc:grpc-services")
-    implementation("io.grpc:grpc-netty-shaded")
+    implementation(project(":mock-rpc-server"))
+
+    runtimeOnly("org.apache.logging.log4j:log4j-core")
 
     flinkLib(project(":flink-connector-grpc"))
     flinkLib("org.apache.logging.log4j:log4j-core")
     flinkLib("org.apache.flink:flink-protobuf:$flinkVersion")
+}
+
+tasks.named<Test>("test") {
+    useJUnitPlatform()
+    testLogging {
+        events("passed")
+    }
+}
+
+spotless {
+    // generic formatting for miscellaneous files
+    format("misc") {
+        target("*.gradle.kts", "*.gradle", "*.md", ".gitignore")
+
+        trimTrailingWhitespace()
+        indentWithSpaces()
+        endWithNewline()
+    }
+
+    // chose the Google java formatter, version 1.9
+    java {
+        targetExclude("**/build/generated/**")
+        importOrder()
+        removeUnusedImports()
+        googleJavaFormat()
+    }
 }
 
 protobuf {
