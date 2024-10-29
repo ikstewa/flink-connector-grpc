@@ -22,11 +22,13 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Build
-        uses: gradle/actions/setup-gradle@v3
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
-          arguments: build
           dependency-graph: generate-and-submit
+
+      - name: Build
+        run: ./gradlew build
 
       - name: Upload to Codecov
         uses: codecov/codecov-action@v4
