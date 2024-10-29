@@ -1,0 +1,8 @@
+amends "MockServer.pkl"
+
+services {
+  new {
+    name = "SayHello"
+    methodDescriptorSource = "io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod"
+  }
+}

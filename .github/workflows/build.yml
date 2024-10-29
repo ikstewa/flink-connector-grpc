@@ -28,7 +28,7 @@ jobs:
           dependency-graph: generate-and-submit
 
       - name: Build
-        run: ./gradlew build --stacktrace
+        run: ./gradlew build
 
       - name: Upload to Codecov
         uses: codecov/codecov-action@v4

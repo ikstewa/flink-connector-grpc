@@ -1,0 +1,33 @@
+module io.mock.grpc.MockServer
+
+/// The grpc port
+port: Int32 = 50051
+
+/// The configured services
+services: Listing<Service>
+
+class Service {
+  /// Human readable name of the rpc service
+  name: String
+
+  /// The static method to load the io.grpc.MethodDescriptor from
+  /// Example: 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod'.
+  methodDescriptorSource : String
+
+  /// Listing of requests to mock for the service.
+  /// Requests are processed in order and the first one to match is retruned.
+  requests: Listing<MockRequest>
+}
+
+abstract class MockRequest {
+}
+
+class JsonataRequest extends MockRequest {
+  /// A JSONata query which is ran against the GRPC request object as JSON.
+  /// Expected for the expression to be a predicate.
+  requestExpression: String
+
+  /// A JSONata query which is ran against the GRPC request object as JSON.
+  /// Expected for the expression to result in a JSON object which is mapped to the GRPC response.
+  responseExpression: String
+}

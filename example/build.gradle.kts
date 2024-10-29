@@ -1,9 +1,6 @@
 
 plugins {
-    `java-library`
     application
-    jacoco
-    id("com.diffplug.spotless") version "6.25.0"
     id("com.google.protobuf") version "0.9.4"
     id("com.google.cloud.tools.jib") version "3.4.4"
     id("com.gradleup.shadow") version "8.3.3"
@@ -16,9 +13,11 @@ java {
 }
 
 application {
-    mainClass = "org.apache.examples.helloworld.HelloWorldServer"
+    mainClass = "io.mock.grpc.MockJsonRpcServer"
 }
 jib.to.image = "example-grpc-server"
+jib.container.mainClass = application.mainClass.get()
+
 
 repositories {
     mavenCentral()
@@ -28,13 +27,14 @@ repositories {
 val flinkLib by configurations.creating
 val flinkVersion: String by rootProject.extra
 dependencies {
-    api(platform("org.apache.logging.log4j:log4j-bom:2.24.1"))
-    api(platform("io.grpc:grpc-bom:1.68.0"))
+    implementation(platform("org.apache.logging.log4j:log4j-bom:2.24.1"))
 
-    implementation("javax.annotation:javax.annotation-api:1.3.2")
+    implementation(project(":mock-rpc-server"))
     implementation("io.grpc:grpc-protobuf")
     implementation("io.grpc:grpc-services")
-    implementation("io.grpc:grpc-netty-shaded")
+    implementation("javax.annotation:javax.annotation-api:1.3.2")
+
+    runtimeOnly("org.apache.logging.log4j:log4j-core")
 
     flinkLib(project(":flink-connector-grpc"))
     flinkLib("org.apache.logging.log4j:log4j-core")

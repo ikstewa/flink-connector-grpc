@@ -1,0 +1,18 @@
+amends "modulepath:/MockServer.pkl"
+
+services {
+  new {
+    name = "SayHello"
+    methodDescriptorSource = "io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod"
+    requests = new {
+      new JsonataRequest {
+        requestExpression = "true"
+        responseExpression = """
+          {
+            "message": "Hello " & name
+          }
+        """
+      }
+    }
+  }
+}
