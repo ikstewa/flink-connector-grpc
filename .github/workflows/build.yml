@@ -25,7 +25,7 @@ jobs:
       - name: Build
         uses: gradle/actions/setup-gradle@v3
         with:
-          arguments: build --stacktrace
+          arguments: build
           dependency-graph: generate-and-submit
 
       - name: Upload to Codecov
