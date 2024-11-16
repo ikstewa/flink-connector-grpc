@@ -15,18 +15,6 @@
 //
 package io.mock.grpc;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-
-import javax.annotation.Nullable;
-
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import org.pkl.config.java.ConfigEvaluator;
-import org.pkl.core.ModuleSource;
-
 import io.grpc.Grpc;
 import io.grpc.InsecureServerCredentials;
 import io.grpc.Metadata;
@@ -35,6 +23,15 @@ import io.grpc.ServerCall;
 import io.grpc.ServerCall.Listener;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
+import java.io.File;
+import java.io.IOException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import javax.annotation.Nullable;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.pkl.config.java.ConfigEvaluator;
+import org.pkl.core.ModuleSource;
 
 /** Test server used for mocking gRPC requests using json payloads. */
 public class MockJsonRpcServer {

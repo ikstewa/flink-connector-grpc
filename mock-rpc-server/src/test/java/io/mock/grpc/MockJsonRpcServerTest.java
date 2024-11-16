@@ -38,7 +38,7 @@ class MockJsonRpcServerTest {
 
   @AfterEach
   void shutdown() throws InterruptedException {
-    this.server.stop();
+    this.server.shutdown();
     this.clientChannel.shutdownNow();
   }
 
@@ -140,7 +140,8 @@ class MockJsonRpcServerTest {
     final MockServer serverConfig = parseConfig(cfgSource);
 
     try {
-      this.server = new MockJsonRpcServer(serverConfig).start();
+      this.server = new MockJsonRpcServer();
+      this.server.start(serverConfig);
     } catch (Exception e) {
       throw new RuntimeException("Failed to start server", e);
     }
