@@ -38,7 +38,7 @@ class MockJsonRpcServerTest {
 
   @AfterEach
   void shutdown() throws InterruptedException {
-    this.server.stop();
+    this.server.shutdown();
     this.clientChannel.shutdownNow();
   }
 
@@ -97,6 +97,62 @@ class MockJsonRpcServerTest {
   }
 
   @Test
+  @DisplayName("Can restart server")
+  void test_server_restart() throws IOException {
+    var config =
+        """
+      amends "modulepath:/test_config.pkl"
+
+      services {
+        [[name == "SayHello"]]
+        {
+          requests = new {
+            new JsonataRequest {
+              requestExpression = "true"
+              responseExpression = \"""
+                {
+                  "message": "Hello stranger..."
+                }
+              \"""
+            }
+          }
+        }
+      }
+    """;
+
+    final var client = GreeterGrpc.newBlockingStub(startServer(ModuleSource.text(config)));
+
+    final var response = client.sayHello(HelloRequest.newBuilder().setName("Random guy").build());
+
+    Truth.assertThat(response.getMessage()).isEqualTo("Hello stranger...");
+
+    this.server.start(parseConfig(ModuleSource.text(config)));
+    config =
+        """
+      amends "modulepath:/test_config.pkl"
+
+      services {
+        [[name == "SayHello"]]
+        {
+          requests = new {
+            new JsonataRequest {
+              requestExpression = "true"
+              responseExpression = \"""
+                {
+                  "message": "I know you..."
+                }
+              \"""
+            }
+          }
+        }
+      }
+    """;
+    this.server.start(parseConfig(ModuleSource.text(config)));
+    final var response2 = client.sayHello(HelloRequest.newBuilder().setName("Random guy").build());
+    Truth.assertThat(response2.getMessage()).isEqualTo("I know you...");
+  }
+
+  @Test
   @DisplayName("Can apply jsonata expressions")
   void test_jsonata() throws IOException {
     final var config =
@@ -140,7 +196,8 @@ class MockJsonRpcServerTest {
     final MockServer serverConfig = parseConfig(cfgSource);
 
     try {
-      this.server = new MockJsonRpcServer(serverConfig).start();
+      this.server = new MockJsonRpcServer();
+      this.server.start(serverConfig);
     } catch (Exception e) {
       throw new RuntimeException("Failed to start server", e);
     }

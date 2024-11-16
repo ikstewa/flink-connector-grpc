@@ -38,15 +38,13 @@ import java.util.Objects;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-public class JsonataRpcService {
+class JsonataRpcService {
   private static final Logger LOG = LogManager.getLogger(MockJsonRpcServer.class);
 
-  private final Service config;
   private final ServerServiceDefinition serviceDef;
 
   public JsonataRpcService(Service config) {
-    this.config = Objects.requireNonNull(config);
-    this.serviceDef = buildServiceDefinition(config);
+    this.serviceDef = buildServiceDefinition(Objects.requireNonNull(config));
   }
 
   public ServerServiceDefinition serviceDefinition() {
