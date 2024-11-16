@@ -15,27 +15,104 @@
 //
 package io.mock.grpc;
 
-import io.grpc.Grpc;
-import io.grpc.InsecureServerCredentials;
-import io.grpc.Server;
+import java.io.File;
 import java.io.IOException;
-import java.util.Objects;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+
+import javax.annotation.Nullable;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.pkl.config.java.ConfigEvaluator;
 import org.pkl.core.ModuleSource;
 
+import io.grpc.Grpc;
+import io.grpc.InsecureServerCredentials;
+import io.grpc.Server;
+
 /** Test server used for mocking gRPC requests using json payloads. */
 public class MockJsonRpcServer {
   private static final Logger LOG = LogManager.getLogger(MockJsonRpcServer.class);
 
-  private final MockServer config;
-  private final Server server;
+  private MockServer config;
+  private Server server;
+  private final CountDownLatch shutdownSignal;
 
-  public MockJsonRpcServer(MockServer config) {
-    this.config = Objects.requireNonNull(config);
-    this.server = buildServer(config);
+  public MockJsonRpcServer() {
+    this.shutdownSignal = new CountDownLatch(1);
+    Runtime.getRuntime()
+        .addShutdownHook(
+            new Thread() {
+              @Override
+              public void run() {
+                // Use stderr here since the logger may have been reset by its JVM shutdown hook.
+                System.err.println("*** shutting down gRPC server since JVM is shutting down");
+                MockJsonRpcServer.this.shutdown();
+                System.err.println("*** server shut down");
+              }
+            });
+  }
+
+  void start(@Nullable String configFile) throws IOException {
+    final MockServer serverConfig;
+    if (configFile != null) {
+      try (var evaluator = ConfigEvaluator.preconfigured()) {
+        serverConfig = evaluator.evaluate(ModuleSource.file(configFile)).as(MockServer.class);
+      }
+    } else {
+      serverConfig = null;
+    }
+    this.start(serverConfig);
+  }
+
+  synchronized void start(@Nullable MockServer targetConfig) throws IOException {
+    if (server != null) {
+      if (config.equals(targetConfig)) {
+        LOG.info("Config file unchanged. Skipping restart...");
+        return;
+      }
+      LOG.info("Shutting down Server...");
+      try {
+        server.shutdown().awaitTermination(30, TimeUnit.SECONDS);
+      } catch (InterruptedException e) {
+        LOG.error("Interrupted shutting down server", e);
+      }
+    }
+
+    if (targetConfig != null) {
+      try {
+        config = targetConfig;
+        server = buildServer(targetConfig);
+        server.start();
+        LOG.info(
+            "Started server on port '{}' for services '{}'",
+            config.port,
+            config.services.stream().map(s -> s.name).toList());
+      } catch (RuntimeException e) {
+        LOG.error("Failed starting server", e);
+        this.shutdown();
+      }
+    } else {
+      config = null;
+      server = null;
+    }
+  }
+
+  synchronized void shutdown() {
+    try {
+      if (server != null) {
+        server.shutdown().awaitTermination(30, TimeUnit.SECONDS);
+      }
+      this.shutdownSignal.countDown();
+    } catch (InterruptedException e) {
+      LOG.error("Caught exception closing Server", e);
+    }
+  }
+
+  void blockUntilShutdown() throws InterruptedException {
+    this.shutdownSignal.await();
+    LOG.info("Server terminated");
   }
 
   private static Server buildServer(MockServer config) {
@@ -48,54 +125,18 @@ public class MockJsonRpcServer {
     return serverBldr.build();
   }
 
-  MockJsonRpcServer start() throws IOException {
-    server.start();
-
-    LOG.info("Server started, listening on " + this.config.port);
-    Runtime.getRuntime()
-        .addShutdownHook(
-            new Thread() {
-              @Override
-              public void run() {
-                // Use stderr here since the logger may have been reset by its JVM shutdown hook.
-                System.err.println("*** shutting down gRPC server since JVM is shutting down");
-                try {
-                  MockJsonRpcServer.this.stop();
-                } catch (InterruptedException e) {
-                  e.printStackTrace(System.err);
-                }
-                System.err.println("*** server shut down");
-              }
-            });
-    return this;
-  }
-
-  void stop() throws InterruptedException {
-    if (server != null) {
-      server.shutdown().awaitTermination(30, TimeUnit.SECONDS);
-    }
-  }
-
-  private void blockUntilShutdown() throws InterruptedException {
-    if (server != null) {
-      server.awaitTermination();
-    }
-  }
-
   public static void main(String[] args) throws IOException, InterruptedException {
+
     if (args.length != 1) {
-      LOG.error("Expected one input param of pkl config file.");
+      LOG.error("Expected one input param of pkl config file or directory.");
       System.exit(1);
-    } else {
-
-      final MockServer serverConfig;
-      try (var evaluator = ConfigEvaluator.preconfigured()) {
-        serverConfig = evaluator.evaluate(ModuleSource.uri(args[0])).as(MockServer.class);
-      }
-
-      final MockJsonRpcServer server = new MockJsonRpcServer(serverConfig);
-      server.start();
-      server.blockUntilShutdown();
     }
+    final var configPath = new File(args[0]).toPath();
+
+    final var server = new MockJsonRpcServer();
+    final var config = new ConfigWatcher(server, configPath);
+    config.start();
+    server.blockUntilShutdown();
+    System.exit(1);
   }
 }
