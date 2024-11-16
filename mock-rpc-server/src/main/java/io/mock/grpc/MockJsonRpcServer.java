@@ -20,10 +20,9 @@ import io.grpc.InsecureServerCredentials;
 import io.grpc.Metadata;
 import io.grpc.Server;
 import io.grpc.ServerCall;
+import io.grpc.ServerCall.Listener;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
-import io.grpc.ServerCall.Listener;
-
 import java.io.IOException;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
@@ -47,15 +46,18 @@ public class MockJsonRpcServer {
   private static Server buildServer(MockServer config) {
     final var serverBldr =
         Grpc.newServerBuilderForPort(config.port, InsecureServerCredentials.create())
-         /* This method call adds the Interceptor to enable compressed server responses for all RPCs */
-        .intercept(new ServerInterceptor() {
-          @Override
-          public <ReqT, RespT> Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call, Metadata headers,
-              ServerCallHandler<ReqT, RespT> next) {
-            call.setCompression("gzip");
-            return next.startCall(call, headers);
-          }
-        });
+            /* This method call adds the Interceptor to enable compressed server responses for all RPCs */
+            .intercept(
+                new ServerInterceptor() {
+                  @Override
+                  public <ReqT, RespT> Listener<ReqT> interceptCall(
+                      ServerCall<ReqT, RespT> call,
+                      Metadata headers,
+                      ServerCallHandler<ReqT, RespT> next) {
+                    call.setCompression("gzip");
+                    return next.startCall(call, headers);
+                  }
+                });
     config.services.stream()
         .map(JsonataRpcService::new)
         .map(JsonataRpcService::serviceDefinition)
