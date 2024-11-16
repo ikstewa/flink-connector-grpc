@@ -72,8 +72,10 @@ SELECT
   *
 FROM NamedEvents AS E
   JOIN Greeter FOR SYSTEM_TIME AS OF E.proc_time AS G
-    ON E.name = G.name;
+    ON E.name = G.name
+    AND E.last_name = G.last_name;
 ```
+
 
 The columns specified as the `PIMARY KEY` and used for the JOIN `ON` condition will be converted to the configured proto `request` object.
 
