@@ -58,7 +58,8 @@ public class GrpcLookupFunction extends AsyncLookupFunction {
                 "retryableStatusCodes": [
                   "UNAVAILABLE",
                   "INTERNAL",
-                  "PERMISSION_DENIED"
+                  "PERMISSION_DENIED",
+                  "NOT_FOUND"
                 ]
               }
             }
