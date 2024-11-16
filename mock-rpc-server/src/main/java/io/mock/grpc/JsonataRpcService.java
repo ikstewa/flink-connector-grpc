@@ -170,7 +170,7 @@ class JsonataRpcService {
     public String parse(InputStream stream) {
       final Message msg = protoMarsh.parse(stream);
       try {
-        return JsonFormat.printer().print(msg);
+        return JsonFormat.printer().preservingProtoFieldNames().print(msg);
       } catch (InvalidProtocolBufferException e) {
         throw new RuntimeException(e);
       }
