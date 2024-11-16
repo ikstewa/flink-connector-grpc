@@ -9,7 +9,7 @@ services {
         requestExpression = "true"
         responseExpression = """
           {
-            "message": "Hello " & name
+            "message": "Hello " & name & " " & last_name
           }
         """
       }

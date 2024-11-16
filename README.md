@@ -38,6 +38,7 @@ Data Source Table
 ```roomsql
 CREATE TABLE NamedEvents (
   name STRING,
+  last_name STRING,
   num INT,
   proc_time AS PROCTIME()
 ) WITH (
@@ -53,7 +54,8 @@ Enrichment Lookup Table
 ```roomsql
 CREATE TABLE Greeter (
   message STRING,
-  name STRING
+  name STRING,
+  last_name STRING
 ) WITH (
   'connector' = 'grpc-lookup',
   'host' = 'grpc-server',
