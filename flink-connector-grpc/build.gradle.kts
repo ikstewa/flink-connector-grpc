@@ -21,7 +21,7 @@ repositories {
 
 val flinkVersion: String by rootProject.extra
 dependencies {
-    api(platform("org.apache.logging.log4j:log4j-bom:2.24.1"))
+    api(platform("org.apache.logging.log4j:log4j-bom:2.24.2"))
     api(platform("io.grpc:grpc-bom:1.68.1"))
 
     implementation("com.google.code.findbugs:jsr305:3.0.2")
