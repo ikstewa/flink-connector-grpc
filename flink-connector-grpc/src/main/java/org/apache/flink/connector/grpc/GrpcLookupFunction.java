@@ -111,6 +111,7 @@ public class GrpcLookupFunction extends AsyncLookupFunction {
     if (this.grpcConfig.usePlainText()) {
       channelBuilder = channelBuilder.usePlaintext();
     }
+    channelBuilder = channelBuilder.maxInboundMessageSize(Integer.MAX_VALUE);
     this.channel = channelBuilder.build();
 
     // MethodDescriptor is not serializable so re-build on open
