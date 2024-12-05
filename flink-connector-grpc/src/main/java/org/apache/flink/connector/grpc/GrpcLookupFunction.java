@@ -56,6 +56,7 @@ public class GrpcLookupFunction extends AsyncLookupFunction {
                 "maxBackoff": "30s",
                 "backoffMultiplier": 2,
                 "retryableStatusCodes": [
+                  "UNKNOWN",
                   "UNAVAILABLE",
                   "INTERNAL",
                   "PERMISSION_DENIED",
