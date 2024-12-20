@@ -12,6 +12,10 @@ The primary use case for the gRPC connector is to be used in a [Lookup Join](htt
 * Sink - Add Table Sink support to egress via gRPC
 * Auth - Currently assuming internal private networks
 * GRPC Retry Policy - Better customization of the GRPC retry policy
+* Metadata support (status code, description, headers)
+* Configurable error codes (which to fail on)
+* Cacheable error codes (configurable)
+* Wrapped request/response types
 
 ## Example Usage
 

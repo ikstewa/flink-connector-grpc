@@ -15,11 +15,16 @@
 //
 package org.apache.flink.connector.grpc;
 
+import io.grpc.StatusRuntimeException;
 import java.io.Serializable;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import javax.annotation.Nullable;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.serialization.SerializationSchema;
@@ -31,22 +36,28 @@ import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.connector.source.LookupTableSource;
 import org.apache.flink.table.connector.source.abilities.SupportsLimitPushDown;
 import org.apache.flink.table.connector.source.abilities.SupportsProjectionPushDown;
+import org.apache.flink.table.connector.source.abilities.SupportsReadingMetadata;
 import org.apache.flink.table.connector.source.lookup.AsyncLookupFunctionProvider;
 import org.apache.flink.table.connector.source.lookup.PartialCachingAsyncLookupProvider;
 import org.apache.flink.table.connector.source.lookup.cache.LookupCache;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.utils.JoinedRowData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.utils.LogicalTypeChecks;
 
 class GrpcLookupTableSource
-    implements LookupTableSource, SupportsProjectionPushDown, SupportsLimitPushDown {
+    implements LookupTableSource,
+        SupportsProjectionPushDown,
+        SupportsLimitPushDown,
+        SupportsReadingMetadata {
 
   private final GrpcServiceOptions grpcConfig;
   private DataType physicalRowDataType;
   private final EncodingFormat<SerializationSchema<RowData>> requestFormat;
   private final DecodingFormat<DeserializationSchema<RowData>> responseFormat;
   @Nullable private final LookupCache cache;
+  private List<GrpcMetadataField> metadataFields;
 
   GrpcLookupTableSource(
       GrpcServiceOptions grpcConfig,
@@ -56,6 +67,7 @@ class GrpcLookupTableSource
       @Nullable LookupCache cache) {
     this.grpcConfig = grpcConfig;
     this.physicalRowDataType = physicalRowDataType;
+    this.metadataFields = List.of();
     this.requestFormat = requestFormat;
     this.responseFormat = responseFormat;
     this.cache = cache;
@@ -78,17 +90,15 @@ class GrpcLookupTableSource
 
   @Override
   public LookupRuntimeProvider getLookupRuntimeProvider(LookupContext lookupContext) {
-    final var rowDef = createMappings(this.physicalRowDataType, lookupContext.getKeys());
-
-    final var requestSchemaEncoder =
-        this.requestFormat.createRuntimeEncoder(null, rowDef.requestRow());
-
-    final var responseSchemaDecoder =
-        this.responseFormat.createRuntimeDecoder(lookupContext, rowDef.responseRow());
+    final var rowDef =
+        extractRequestResponseTypes(this.physicalRowDataType, lookupContext.getKeys());
 
     final var lookupFunc =
         new GrpcLookupFunction(
-            this.grpcConfig, rowDef.combiner(), requestSchemaEncoder, responseSchemaDecoder);
+            this.grpcConfig,
+            new ResponseHandler(rowDef.combiner(), this.metadataFields),
+            this.requestFormat.createRuntimeEncoder(null, rowDef.requestRow()),
+            this.responseFormat.createRuntimeDecoder(lookupContext, rowDef.responseRow()));
 
     if (cache != null) {
       return PartialCachingAsyncLookupProvider.of(lookupFunc, cache);
@@ -97,12 +107,43 @@ class GrpcLookupTableSource
     }
   }
 
+  private static class ResponseHandler implements GrpcResponseHandler<RowData, RowData, RowData> {
+
+    private final BiFunction<RowData, RowData, RowData> combiner;
+    private final List<GrpcMetadataField> metaFields;
+
+    public ResponseHandler(
+        BiFunction<RowData, RowData, RowData> combiner, List<GrpcMetadataField> metaFields) {
+      this.combiner = combiner;
+      this.metaFields = metaFields;
+    }
+
+    @Override
+    public RowData handle(RowData request, RowData response, StatusRuntimeException err) {
+      // TODO: Add config for supressing status codes and throw others
+      return new JoinedRowData(combiner.apply(request, response), createMetadataFields(err));
+    }
+
+    private RowData createMetadataFields(@Nullable StatusRuntimeException error) {
+      final var row = new GenericRowData(metaFields.size());
+      for (var i = 0; i < metaFields.size(); i++) {
+        final var metaVal =
+            switch (metaFields.get(i)) {
+              case STATUS_CODE -> error == null ? 0 : error.getStatus().getCode().value();
+            };
+        row.setField(i, metaVal);
+      }
+      return row;
+    }
+  }
+
   /**
-   * Given a DataType with only the physical columns, map indices to request/response rows.
+   * Given a DataType with only the physical columns and the lookup join keys, determine which
+   * fields are mapped to the request type and the response type.
    *
    * <p>Note: Overlapping names take precendence from request to ensure join keys always match
    */
-  private static RowDefinition createMappings(DataType physicalRow, int[][] keys) {
+  private static RowDefinition extractRequestResponseTypes(DataType physicalRow, int[][] keys) {
     final List<String> fieldNames = LogicalTypeChecks.getFieldNames(physicalRow.getLogicalType());
     final List<DataType> fieldTypes = physicalRow.getChildren();
 
@@ -132,20 +173,23 @@ class GrpcLookupTableSource
     final ResultRowBuilder combiner =
         (reqRow, respRow) -> {
           GenericRowData row = new GenericRowData(fieldNames.size());
-          for (var i = 0; i < respRowIdx.size(); i++) {
-            row.setField(respRowIdx.get(i), ((GenericRowData) respRow).getField(i));
+          if (respRow != null) {
+            for (var i = 0; i < respRowIdx.size(); i++) {
+              row.setField(respRowIdx.get(i), ((GenericRowData) respRow).getField(i));
+            }
           }
           for (var i = 0; i < reqRowIdx.size(); i++) {
             row.setField(reqRowIdx.get(i), ((GenericRowData) reqRow).getField(i));
           }
           return row;
         };
-
     return new RowDefinition(reqRowType, respRowType, combiner);
   }
 
-  private record RowDefinition(DataType requestRow, DataType responseRow, ResultRowBuilder combiner)
-      implements Serializable {}
+  private interface ResultRowBuilder extends BiFunction<RowData, RowData, RowData>, Serializable {}
+
+  private record RowDefinition(
+      DataType requestRow, DataType responseRow, ResultRowBuilder combiner) {}
 
   @Override
   public void applyProjection(int[][] projectedFields, DataType producedDataType) {
@@ -159,4 +203,15 @@ class GrpcLookupTableSource
 
   @Override
   public void applyLimit(long limit) {}
+
+  @Override
+  public Map<String, DataType> listReadableMetadata() {
+    return Stream.of(GrpcMetadataField.values())
+        .collect(Collectors.toMap(md -> md.key, md -> md.dataType));
+  }
+
+  @Override
+  public void applyReadableMetadata(List<String> metadataKeys, DataType producedDataType) {
+    this.metadataFields = metadataKeys.stream().map(GrpcMetadataField::fromKey).toList();
+  }
 }

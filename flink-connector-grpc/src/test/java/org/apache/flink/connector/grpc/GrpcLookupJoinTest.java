@@ -19,7 +19,9 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.truth.Truth;
 import io.grpc.Grpc;
 import io.grpc.InsecureServerCredentials;
+import io.grpc.Metadata;
 import io.grpc.Server;
+import io.grpc.Status;
 import io.grpc.examples.helloworld.GreeterGrpc;
 import io.grpc.examples.helloworld.HelloReply;
 import io.grpc.examples.helloworld.HelloRequest;
@@ -34,6 +36,7 @@ import org.apache.flink.types.Row;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -124,7 +127,7 @@ class GrpcLookupJoinTest {
     env.executeSql(
         """
       CREATE TABLE input_data (
-        name STRING,
+        name STRING NOT NULL,
         proc_time AS PROCTIME()
       ) WITH (
         'connector' = 'datagen',
@@ -172,6 +175,137 @@ class GrpcLookupJoinTest {
             Row.of("3", "Hello 3"),
             Row.of("4", "Hello 4"),
             Row.of("5", "Hello 5"));
+  }
+
+  @Test
+  @DisplayName("Supports metadata")
+  void testMetadata() {
+    final EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
+    final TableEnvironment env = TableEnvironment.create(settings);
+
+    env.executeSql(
+        """
+      CREATE TABLE input_data (
+        name STRING,
+        proc_time AS PROCTIME()
+      ) WITH (
+        'connector' = 'datagen',
+        'number-of-rows' = '5',
+        'fields.name.kind' = 'sequence',
+        'fields.name.start' = '1',
+        'fields.name.end' = '10'
+      );""");
+    env.executeSql(
+        """
+      CREATE TABLE Greeter (
+        message STRING,
+        tenant_id STRING,
+        grpc_status_code INT METADATA FROM 'status_code',
+        name STRING
+      ) WITH (
+        'connector' = 'grpc-lookup',
+        'host' = 'localhost',
+        'port' = '50051',
+        'use-plain-text' = 'true',
+        'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod'
+      );""");
+
+    final var sql =
+        """
+        SELECT
+          E.name AS name,
+          G.message AS message,
+          G.grpc_status_code
+        FROM input_data AS E
+          JOIN Greeter FOR SYSTEM_TIME AS OF E.proc_time AS G
+            ON E.name = G.name;""";
+
+    final var results = ImmutableList.copyOf(env.executeSql(sql).collect());
+
+    Truth.assertThat(results)
+        .containsExactly(
+            Row.of("1", "Hello 1", 0),
+            Row.of("2", "Hello 2", 0),
+            Row.of("3", "Hello 3", 0),
+            Row.of("4", "Hello 4", 0),
+            Row.of("5", "Hello 5", 0));
+  }
+
+  @Test
+  @DisplayName("Supports metadata on failure")
+  void testMetadataOnFailure() {
+    final EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
+    final TableEnvironment env = TableEnvironment.create(settings);
+
+    env.executeSql(
+        """
+      CREATE TABLE Greeter (
+        message STRING,
+        grpc_status_code INT METADATA FROM 'status_code',
+        name STRING
+      ) WITH (
+        'connector' = 'grpc-lookup',
+        'host' = 'localhost',
+        'port' = '50051',
+        'use-plain-text' = 'true',
+        'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod'
+      );""");
+
+    final var sql =
+        """
+        SELECT
+          E.name AS name,
+          G.message AS message,
+          G.grpc_status_code
+        FROM (
+          SELECT
+              'FAIL_ME' AS name,
+              PROCTIME() AS proc_time) E
+          JOIN Greeter FOR SYSTEM_TIME AS OF E.proc_time AS G
+            ON E.name = G.name;""";
+
+    final var results = ImmutableList.copyOf(env.executeSql(sql).collect());
+
+    Truth.assertThat(results).containsExactly(Row.of("FAIL_ME", null, 3));
+  }
+
+  @Test
+  @Disabled
+  @DisplayName("Supports nesting reponse as row")
+  void testNestedRowResponse() {
+    final EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
+    final TableEnvironment env = TableEnvironment.create(settings);
+
+    env.executeSql(
+        """
+      CREATE TABLE Greeter (
+        message STRING,
+        response ROW<name STRING NOT NULL>,
+        grpc_status_code INT METADATA FROM 'status_code'
+      ) WITH (
+        'connector' = 'grpc-lookup',
+        'host' = 'localhost',
+        'port' = '50051',
+        'use-plain-text' = 'true',
+        'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod'
+      );""");
+
+    final var sql =
+        """
+        SELECT
+          E.name AS name,
+          G.message AS message,
+          G.grpc_status_code
+        FROM (
+          SELECT
+              'FAIL_ME' AS name,
+              PROCTIME() AS proc_time) E
+          JOIN Greeter FOR SYSTEM_TIME AS OF E.proc_time AS G
+            ON E.name = G.name;""";
+
+    final var results = ImmutableList.copyOf(env.executeSql(sql).collect());
+
+    Truth.assertThat(results).containsExactly(Row.of("FAIL_ME", null, 3));
   }
 
   @Test
@@ -272,9 +406,20 @@ class GrpcLookupJoinTest {
 
     @Override
     public void sayHello(HelloRequest req, StreamObserver<HelloReply> responseObserver) {
-      HelloReply reply = HelloReply.newBuilder().setMessage("Hello " + req.getName()).build();
-      responseObserver.onNext(reply);
-      responseObserver.onCompleted();
+      if (req.getName().equals("FAIL_ME")) {
+        final var metadata = new Metadata();
+        metadata.put(
+            Metadata.Key.of("FAILURE_INFO", io.grpc.Metadata.ASCII_STRING_MARSHALLER),
+            "my-failure-reason");
+        responseObserver.onError(
+            Status.INVALID_ARGUMENT
+                .augmentDescription("I WAS TOLD TO FAIL")
+                .asRuntimeException(metadata));
+      } else {
+        HelloReply reply = HelloReply.newBuilder().setMessage("Hello " + req.getName()).build();
+        responseObserver.onNext(reply);
+        responseObserver.onCompleted();
+      }
     }
   }
 }
