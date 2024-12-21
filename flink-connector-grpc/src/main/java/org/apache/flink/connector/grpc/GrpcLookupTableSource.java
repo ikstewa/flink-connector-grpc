@@ -107,17 +107,9 @@ class GrpcLookupTableSource
     }
   }
 
-  private static class ResponseHandler implements GrpcResponseHandler<RowData, RowData, RowData> {
-
-    private final BiFunction<RowData, RowData, RowData> combiner;
-    private final List<GrpcMetadataField> metaFields;
-
-    public ResponseHandler(
-        BiFunction<RowData, RowData, RowData> combiner, List<GrpcMetadataField> metaFields) {
-      this.combiner = combiner;
-      this.metaFields = metaFields;
-    }
-
+  private record ResponseHandler(
+      BiFunction<RowData, RowData, RowData> combiner, List<GrpcMetadataField> metaFields)
+      implements GrpcResponseHandler<RowData, RowData, RowData> {
     @Override
     public RowData handle(RowData request, RowData response, StatusRuntimeException err) {
       // TODO: Add config for supressing status codes and throw others
