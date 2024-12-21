@@ -15,20 +15,17 @@
 //
 package org.apache.flink.connector.grpc;
 
-import io.grpc.StatusRuntimeException;
-import java.io.Serializable;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.function.BiFunction;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.serialization.SerializationSchema;
-import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.connector.grpc.handler.CombinedRowResponseHandler;
+import org.apache.flink.connector.grpc.handler.GrpcResponseHandler;
+import org.apache.flink.connector.grpc.handler.JoinedResponseHandler;
+import org.apache.flink.connector.grpc.handler.MetadataResponseHandler;
 import org.apache.flink.table.connector.Projection;
 import org.apache.flink.table.connector.format.DecodingFormat;
 import org.apache.flink.table.connector.format.EncodingFormat;
@@ -40,12 +37,8 @@ import org.apache.flink.table.connector.source.abilities.SupportsReadingMetadata
 import org.apache.flink.table.connector.source.lookup.AsyncLookupFunctionProvider;
 import org.apache.flink.table.connector.source.lookup.PartialCachingAsyncLookupProvider;
 import org.apache.flink.table.connector.source.lookup.cache.LookupCache;
-import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.data.StringData;
-import org.apache.flink.table.data.utils.JoinedRowData;
 import org.apache.flink.table.types.DataType;
-import org.apache.flink.table.types.logical.utils.LogicalTypeChecks;
 
 class GrpcLookupTableSource
     implements LookupTableSource,
@@ -91,15 +84,22 @@ class GrpcLookupTableSource
 
   @Override
   public LookupRuntimeProvider getLookupRuntimeProvider(LookupContext lookupContext) {
-    final var rowDef =
-        extractRequestResponseTypes(this.physicalRowDataType, lookupContext.getKeys());
+    final CombinedRowResponseHandler rowResponseHandler =
+        CombinedRowResponseHandler.fromLookupContext(this.physicalRowDataType, lookupContext);
+
+    final SerializationSchema<RowData> requestSchemaEncoder =
+        this.requestFormat.createRuntimeEncoder(null, rowResponseHandler.requestType());
+
+    final DeserializationSchema<RowData> responseSchemaDecoder =
+        this.responseFormat.createRuntimeDecoder(lookupContext, rowResponseHandler.responseType());
+
+    final GrpcResponseHandler<RowData, RowData, RowData> responseHandler =
+        new JoinedResponseHandler<>(
+            rowResponseHandler, new MetadataResponseHandler(this.metadataFields));
 
     final var lookupFunc =
         new GrpcLookupFunction(
-            this.grpcConfig,
-            new ResponseHandler(rowDef.combiner(), this.metadataFields),
-            this.requestFormat.createRuntimeEncoder(null, rowDef.requestRow()),
-            this.responseFormat.createRuntimeDecoder(lookupContext, rowDef.responseRow()));
+            this.grpcConfig, responseHandler, requestSchemaEncoder, responseSchemaDecoder);
 
     if (cache != null) {
       return PartialCachingAsyncLookupProvider.of(lookupFunc, cache);
@@ -107,84 +107,6 @@ class GrpcLookupTableSource
       return AsyncLookupFunctionProvider.of(lookupFunc);
     }
   }
-
-  private record ResponseHandler(
-      BiFunction<RowData, RowData, RowData> combiner, List<GrpcMetadataField> metaFields)
-      implements GrpcResponseHandler<RowData, RowData, RowData> {
-    @Override
-    public RowData handle(RowData request, RowData response, StatusRuntimeException err) {
-      // TODO: Add config for supressing status codes and throw others
-      return new JoinedRowData(combiner.apply(request, response), createMetadataFields(err));
-    }
-
-    private RowData createMetadataFields(@Nullable StatusRuntimeException error) {
-      final var row = new GenericRowData(metaFields.size());
-      for (var i = 0; i < metaFields.size(); i++) {
-        final var metaVal =
-            switch (metaFields.get(i)) {
-              case STATUS_CODE -> error == null ? 0 : error.getStatus().getCode().value();
-              case STATUS_DESCRIPTION ->
-                  error == null ? null : StringData.fromString(error.getStatus().getDescription());
-            };
-        row.setField(i, metaVal);
-      }
-      return row;
-    }
-  }
-
-  /**
-   * Given a DataType with only the physical columns and the lookup join keys, determine which
-   * fields are mapped to the request type and the response type.
-   *
-   * <p>Note: Overlapping names take precendence from request to ensure join keys always match
-   */
-  private static RowDefinition extractRequestResponseTypes(DataType physicalRow, int[][] keys) {
-    final List<String> fieldNames = LogicalTypeChecks.getFieldNames(physicalRow.getLogicalType());
-    final List<DataType> fieldTypes = physicalRow.getChildren();
-
-    final Set<Integer> keyIdx = new HashSet<>();
-    for (int[] key : keys) {
-      for (int keyIndex : key) {
-        keyIdx.add(keyIndex);
-      }
-    }
-
-    final List<Integer> reqRowIdx =
-        IntStream.range(0, fieldNames.size()).filter(i -> keyIdx.contains(i)).boxed().toList();
-    final List<Integer> respRowIdx =
-        IntStream.range(0, fieldNames.size()).filter(i -> !keyIdx.contains(i)).boxed().toList();
-
-    final DataType reqRowType =
-        DataTypes.ROW(
-            reqRowIdx.stream()
-                .map(i -> DataTypes.FIELD(fieldNames.get(i), fieldTypes.get(i)))
-                .toList());
-    final DataType respRowType =
-        DataTypes.ROW(
-            respRowIdx.stream()
-                .map(i -> DataTypes.FIELD(fieldNames.get(i), fieldTypes.get(i)))
-                .toList());
-
-    final ResultRowBuilder combiner =
-        (reqRow, respRow) -> {
-          GenericRowData row = new GenericRowData(fieldNames.size());
-          if (respRow != null) {
-            for (var i = 0; i < respRowIdx.size(); i++) {
-              row.setField(respRowIdx.get(i), ((GenericRowData) respRow).getField(i));
-            }
-          }
-          for (var i = 0; i < reqRowIdx.size(); i++) {
-            row.setField(reqRowIdx.get(i), ((GenericRowData) reqRow).getField(i));
-          }
-          return row;
-        };
-    return new RowDefinition(reqRowType, respRowType, combiner);
-  }
-
-  private interface ResultRowBuilder extends BiFunction<RowData, RowData, RowData>, Serializable {}
-
-  private record RowDefinition(
-      DataType requestRow, DataType responseRow, ResultRowBuilder combiner) {}
 
   @Override
   public void applyProjection(int[][] projectedFields, DataType producedDataType) {

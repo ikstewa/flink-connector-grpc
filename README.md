@@ -130,8 +130,10 @@ The following metadata fields are available:
 
 | Key | Data Type | Description |
 | --- | --- | --- |
-| `status_code` | INT NOT NULL | The GRPC response status code |
-| `status_description` | STRING | The GRPC response status description |
+| `status-code` | INT NOT NULL | The GRPC response status code |
+| `status-description` | STRING | The GRPC response status description. Includes only non-OK responses. |
+| `status-trailers` | MAP<STRING NOT NULL, STRING> NOT NULL | The GRPC response trailers for non-OK responses. Includes only string value fields. |
+| `status-trailers-bin` | MAP<STRING NOT NULL, VARBINARY> NOT NULL | The GRPC response trailers for non-OK responses. Includes only binary value fields. |
 
 ```roomsql
 CREATE TABLE Greeter (

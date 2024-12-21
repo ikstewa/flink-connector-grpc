@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-package org.apache.flink.connector.grpc;
+package org.apache.flink.connector.grpc.handler;
 
 import io.grpc.StatusRuntimeException;
 import java.io.Serializable;
@@ -24,7 +24,7 @@ import javax.annotation.Nullable;
  * Responsible for mapping from a deserialized request/response and creating the final produced row
  * returned
  */
-interface GrpcResponseHandler<ReqT, RespT, ProducedT> extends Serializable {
+public interface GrpcResponseHandler<ReqT, RespT, ProducedT> extends Serializable {
   ProducedT handle(
       @Nonnull ReqT request, @Nullable RespT response, @Nullable StatusRuntimeException err);
 }

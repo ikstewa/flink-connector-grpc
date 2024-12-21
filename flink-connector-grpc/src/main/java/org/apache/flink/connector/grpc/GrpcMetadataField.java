@@ -20,25 +20,14 @@ import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.DataType;
 
 public enum GrpcMetadataField {
-  STATUS_CODE("status_code", DataTypes.INT().notNull()),
-  STATUS_DESCRIPTION("status_description", DataTypes.STRING().nullable());
-  // HEADERS(
-  //         "headers",
-  //         // key and value of the map are nullable to make handling easier in queries
-  //         DataTypes.MAP(DataTypes.STRING().nullable(), DataTypes.BYTES().nullable())
-  //                 .notNull(),
-  //         new MetadataConverter() {
-  //             private static final long serialVersionUID = 1L;
-  //
-  //             @Override
-  //             public Object read(ConsumerRecord<?, ?> record) {
-  //                 final Map<StringData, byte[]> map = new HashMap<>();
-  //                 for (Header header : record.headers()) {
-  //                     map.put(StringData.fromString(header.key()), header.value());
-  //                 }
-  //                 return new GenericMapData(map);
-  //             }
-  //         }),
+  STATUS_CODE("status-code", DataTypes.INT().notNull()),
+  STATUS_DESCRIPTION("status-description", DataTypes.STRING().nullable()),
+  STATUS_TRAILERS(
+      "status-trailers",
+      DataTypes.MAP(DataTypes.STRING().notNull(), DataTypes.STRING().nullable()).notNull()),
+  STATUS_TRAILERS_BINARY(
+      "status-trailers-bin",
+      DataTypes.MAP(DataTypes.STRING().notNull(), DataTypes.BYTES().nullable()).notNull());
 
   final String key;
 

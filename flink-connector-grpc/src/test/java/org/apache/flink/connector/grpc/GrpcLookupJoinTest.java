@@ -27,6 +27,7 @@ import io.grpc.examples.helloworld.HelloReply;
 import io.grpc.examples.helloworld.HelloRequest;
 import io.grpc.stub.StreamObserver;
 import java.io.IOException;
+import java.util.Map;
 import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
@@ -200,8 +201,10 @@ class GrpcLookupJoinTest {
       CREATE TABLE Greeter (
         message STRING,
         tenant_id STRING,
-        grpc_status_code INT METADATA FROM 'status_code',
-        grpc_status_desc STRING METADATA FROM 'status_description',
+        grpc_status_code INT METADATA FROM 'status-code',
+        grpc_status_desc STRING METADATA FROM 'status-description',
+        grpc_status_trailers MAP<STRING NOT NULL, STRING> METADATA FROM 'status-trailers',
+        grpc_status_trailers_bin MAP<STRING NOT NULL, STRING> METADATA FROM 'status-trailers-bin',
         name STRING
       ) WITH (
         'connector' = 'grpc-lookup',
@@ -217,7 +220,9 @@ class GrpcLookupJoinTest {
           E.name AS name,
           G.message AS message,
           G.grpc_status_code,
-          G.grpc_status_desc
+          G.grpc_status_desc,
+          G.grpc_status_trailers,
+          G.grpc_status_trailers_bin
         FROM input_data AS E
           JOIN Greeter FOR SYSTEM_TIME AS OF E.proc_time AS G
             ON E.name = G.name;""";
@@ -226,11 +231,11 @@ class GrpcLookupJoinTest {
 
     Truth.assertThat(results)
         .containsExactly(
-            Row.of("1", "Hello 1", 0, null),
-            Row.of("2", "Hello 2", 0, null),
-            Row.of("3", "Hello 3", 0, null),
-            Row.of("4", "Hello 4", 0, null),
-            Row.of("5", "Hello 5", 0, null));
+            Row.of("1", "Hello 1", 0, null, Map.of(), Map.of()),
+            Row.of("2", "Hello 2", 0, null, Map.of(), Map.of()),
+            Row.of("3", "Hello 3", 0, null, Map.of(), Map.of()),
+            Row.of("4", "Hello 4", 0, null, Map.of(), Map.of()),
+            Row.of("5", "Hello 5", 0, null, Map.of(), Map.of()));
   }
 
   @Test
@@ -243,8 +248,10 @@ class GrpcLookupJoinTest {
         """
       CREATE TABLE Greeter (
         message STRING,
-        grpc_status_code INT METADATA FROM 'status_code',
-        grpc_status_desc STRING METADATA FROM 'status_description',
+        grpc_status_code INT METADATA FROM 'status-code',
+        grpc_status_desc STRING METADATA FROM 'status-description',
+        grpc_status_trailers MAP<STRING NOT NULL, STRING> METADATA FROM 'status-trailers',
+        grpc_status_trailers_bin MAP<STRING NOT NULL, VARBINARY> METADATA FROM 'status-trailers-bin',
         name STRING
       ) WITH (
         'connector' = 'grpc-lookup',
@@ -260,7 +267,9 @@ class GrpcLookupJoinTest {
           E.name AS name,
           G.message AS message,
           G.grpc_status_code,
-          G.grpc_status_desc
+          G.grpc_status_desc,
+          G.grpc_status_trailers,
+          G.grpc_status_trailers_bin
         FROM (
           SELECT
               'FAIL_ME' AS name,
@@ -270,7 +279,17 @@ class GrpcLookupJoinTest {
 
     final var results = ImmutableList.copyOf(env.executeSql(sql).collect());
 
-    Truth.assertThat(results).containsExactly(Row.of("FAIL_ME", null, 3, "I WAS TOLD TO FAIL"));
+    Truth.assertThat(results)
+        .containsExactly(
+            Row.of(
+                "FAIL_ME",
+                null,
+                3,
+                "I WAS TOLD TO FAIL",
+                Map.of(
+                    "failure-info", "my-failure-reason",
+                    "content-type", "application/grpc"),
+                Map.of("failure-data-bin", "my-failure-reason".getBytes())));
   }
 
   @Test
@@ -285,7 +304,7 @@ class GrpcLookupJoinTest {
       CREATE TABLE Greeter (
         message STRING,
         response ROW<name STRING NOT NULL>,
-        grpc_status_code INT METADATA FROM 'status_code'
+        grpc_status_code INT METADATA FROM 'status-code'
       ) WITH (
         'connector' = 'grpc-lookup',
         'host' = 'localhost',
@@ -413,8 +432,11 @@ class GrpcLookupJoinTest {
       if (req.getName().equals("FAIL_ME")) {
         final var metadata = new Metadata();
         metadata.put(
-            Metadata.Key.of("FAILURE_INFO", io.grpc.Metadata.ASCII_STRING_MARSHALLER),
+            Metadata.Key.of("failure-info", io.grpc.Metadata.ASCII_STRING_MARSHALLER),
             "my-failure-reason");
+        metadata.put(
+            Metadata.Key.of("failure-data-bin", io.grpc.Metadata.BINARY_BYTE_MARSHALLER),
+            "my-failure-reason".getBytes());
         responseObserver.onError(
             Status.INVALID_ARGUMENT
                 .augmentDescription("I WAS TOLD TO FAIL")
