@@ -66,6 +66,36 @@ class MockJsonRpcServerTest {
   }
 
   @Test
+  @DisplayName("Error Response returns status exception")
+  void test_error_response() throws IOException {
+    final var config =
+        """
+      amends "modulepath:/test_config.pkl"
+
+      services {
+        [[name == "SayHello"]]
+        {
+          requests = new {
+            new JsonataErrorResponse {
+              requestExpression = "true"
+              responseStatusCode = 3
+              responseMessage = "unexpected request shape"
+            }
+          }
+        }
+      }
+    """;
+
+    final var client = GreeterGrpc.newBlockingStub(startServer(ModuleSource.text(config)));
+    var e =
+        Assertions.assertThrows(
+            StatusRuntimeException.class,
+            () -> client.sayHello(HelloRequest.newBuilder().setName("Name not found").build()));
+    Truth.assertThat(e.getStatus().getCode()).isEqualTo(Status.INVALID_ARGUMENT.getCode());
+    Truth.assertThat(e.getMessage()).isEqualTo("INVALID_ARGUMENT: unexpected request shape");
+  }
+
+  @Test
   @DisplayName("Can return static response")
   void test_static_response() throws IOException {
     final var config =
@@ -76,7 +106,7 @@ class MockJsonRpcServerTest {
         [[name == "SayHello"]]
         {
           requests = new {
-            new JsonataRequest {
+            new JsonataResponse {
               requestExpression = "true"
               responseExpression = \"""
                 {
@@ -107,7 +137,7 @@ class MockJsonRpcServerTest {
         [[name == "SayHello"]]
         {
           requests = new {
-            new JsonataRequest {
+            new JsonataResponse {
               requestExpression = "true"
               responseExpression = \"""
                 {
@@ -135,7 +165,7 @@ class MockJsonRpcServerTest {
         [[name == "SayHello"]]
         {
           requests = new {
-            new JsonataRequest {
+            new JsonataResponse {
               requestExpression = "true"
               responseExpression = \"""
                 {
@@ -163,7 +193,7 @@ class MockJsonRpcServerTest {
         [[name == "SayHello"]]
         {
           requests = new {
-            new JsonataRequest {
+            new JsonataResponse {
               requestExpression = "name='John'"
               responseExpression = \"""
                 {
@@ -171,7 +201,7 @@ class MockJsonRpcServerTest {
                 }
               \"""
             }
-            new JsonataRequest {
+            new JsonataResponse {
               requestExpression = "true"
               responseExpression = \"""
                 {

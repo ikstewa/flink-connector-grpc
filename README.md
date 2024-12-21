@@ -86,7 +86,7 @@ The columns specified as the `PIMARY KEY` and used for the JOIN `ON` condition w
 ### Advanced Config
 
 Lookup cache can be enabled and configured using standard config:
-https://nightlies.apache.org/flink/flink-docs-release-1.19/docs/connectors/table/jdbc/#lookup-cache-1
+https://nightlies.apache.org/flink/flink-docs-release-1.20/docs/connectors/table/jdbc/#lookup-cache-1
 
 ```roomsql
 CREATE TABLE Greeter (

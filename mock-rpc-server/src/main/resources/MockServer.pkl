@@ -22,12 +22,21 @@ class Service {
 abstract class MockRequest {
 }
 
-class JsonataRequest extends MockRequest {
+abstract class JsonataRequest extends MockRequest {
   /// A JSONata query which is ran against the GRPC request object as JSON.
   /// Expected for the expression to be a predicate.
   requestExpression: String
+}
 
+class JsonataResponse extends JsonataRequest {
   /// A JSONata query which is ran against the GRPC request object as JSON.
   /// Expected for the expression to result in a JSON object which is mapped to the GRPC response.
   responseExpression: String
+}
+
+class JsonataErrorResponse extends JsonataRequest {
+
+  responseStatusCode: Int32(isBetween(1, 16))
+
+  responseMessage: String
 }

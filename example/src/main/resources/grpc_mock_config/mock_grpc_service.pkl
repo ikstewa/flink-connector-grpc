@@ -5,7 +5,7 @@ services {
     name = "SayHello"
     methodDescriptorSource = "io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod"
     requests = new {
-      new JsonataRequest {
+      new JsonataResponse {
         requestExpression = "true"
         responseExpression = """
           {
