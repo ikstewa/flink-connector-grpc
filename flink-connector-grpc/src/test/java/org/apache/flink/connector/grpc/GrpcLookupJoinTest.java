@@ -201,6 +201,7 @@ class GrpcLookupJoinTest {
         message STRING,
         tenant_id STRING,
         grpc_status_code INT METADATA FROM 'status_code',
+        grpc_status_desc STRING METADATA FROM 'status_description',
         name STRING
       ) WITH (
         'connector' = 'grpc-lookup',
@@ -215,7 +216,8 @@ class GrpcLookupJoinTest {
         SELECT
           E.name AS name,
           G.message AS message,
-          G.grpc_status_code
+          G.grpc_status_code,
+          G.grpc_status_desc
         FROM input_data AS E
           JOIN Greeter FOR SYSTEM_TIME AS OF E.proc_time AS G
             ON E.name = G.name;""";
@@ -224,11 +226,11 @@ class GrpcLookupJoinTest {
 
     Truth.assertThat(results)
         .containsExactly(
-            Row.of("1", "Hello 1", 0),
-            Row.of("2", "Hello 2", 0),
-            Row.of("3", "Hello 3", 0),
-            Row.of("4", "Hello 4", 0),
-            Row.of("5", "Hello 5", 0));
+            Row.of("1", "Hello 1", 0, null),
+            Row.of("2", "Hello 2", 0, null),
+            Row.of("3", "Hello 3", 0, null),
+            Row.of("4", "Hello 4", 0, null),
+            Row.of("5", "Hello 5", 0, null));
   }
 
   @Test
@@ -242,6 +244,7 @@ class GrpcLookupJoinTest {
       CREATE TABLE Greeter (
         message STRING,
         grpc_status_code INT METADATA FROM 'status_code',
+        grpc_status_desc STRING METADATA FROM 'status_description',
         name STRING
       ) WITH (
         'connector' = 'grpc-lookup',
@@ -256,7 +259,8 @@ class GrpcLookupJoinTest {
         SELECT
           E.name AS name,
           G.message AS message,
-          G.grpc_status_code
+          G.grpc_status_code,
+          G.grpc_status_desc
         FROM (
           SELECT
               'FAIL_ME' AS name,
@@ -266,7 +270,7 @@ class GrpcLookupJoinTest {
 
     final var results = ImmutableList.copyOf(env.executeSql(sql).collect());
 
-    Truth.assertThat(results).containsExactly(Row.of("FAIL_ME", null, 3));
+    Truth.assertThat(results).containsExactly(Row.of("FAIL_ME", null, 3, "I WAS TOLD TO FAIL"));
   }
 
   @Test

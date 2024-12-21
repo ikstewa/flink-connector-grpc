@@ -131,6 +131,7 @@ The following metadata fields are available:
 | Key | Data Type | Description |
 | --- | --- | --- |
 | `status_code` | INT NOT NULL | The GRPC response status code |
+| `status_description` | STRING | The GRPC response status description |
 
 ```roomsql
 CREATE TABLE Greeter (

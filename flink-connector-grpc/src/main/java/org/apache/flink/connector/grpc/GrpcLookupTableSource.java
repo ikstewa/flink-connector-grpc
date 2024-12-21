@@ -42,6 +42,7 @@ import org.apache.flink.table.connector.source.lookup.PartialCachingAsyncLookupP
 import org.apache.flink.table.connector.source.lookup.cache.LookupCache;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.utils.JoinedRowData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.utils.LogicalTypeChecks;
@@ -122,6 +123,8 @@ class GrpcLookupTableSource
         final var metaVal =
             switch (metaFields.get(i)) {
               case STATUS_CODE -> error == null ? 0 : error.getStatus().getCode().value();
+              case STATUS_DESCRIPTION ->
+                  error == null ? null : StringData.fromString(error.getStatus().getDescription());
             };
         row.setField(i, metaVal);
       }

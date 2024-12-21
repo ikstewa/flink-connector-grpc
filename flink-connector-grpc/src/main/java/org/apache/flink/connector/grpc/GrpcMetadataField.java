@@ -20,7 +20,8 @@ import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.DataType;
 
 public enum GrpcMetadataField {
-  STATUS_CODE("status_code", DataTypes.INT().notNull());
+  STATUS_CODE("status_code", DataTypes.INT().notNull()),
+  STATUS_DESCRIPTION("status_description", DataTypes.STRING().nullable());
   // HEADERS(
   //         "headers",
   //         // key and value of the map are nullable to make handling easier in queries
