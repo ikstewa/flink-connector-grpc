@@ -30,7 +30,8 @@ import io.grpc.ServerServiceDefinition;
 import io.grpc.Status;
 import io.grpc.stub.ServerCalls.UnaryMethod;
 import io.grpc.stub.StreamObserver;
-import io.mock.grpc.MockServer.JsonataRequest;
+import io.mock.grpc.MockServer.JsonataErrorResponse;
+import io.mock.grpc.MockServer.JsonataResponse;
 import io.mock.grpc.MockServer.Service;
 import java.io.InputStream;
 import java.util.List;
@@ -91,15 +92,20 @@ class JsonataRpcService {
     public JSONataRequestHandler(List<? extends MockServer.MockRequest> requests) {
       this.jsonataRequets =
           requests.stream()
-              .map(
+              .<JSONataRequest>map(
                   r -> {
-                    if (r instanceof JsonataRequest rj) {
-
-                      return new JSONataRequest(
+                    if (r instanceof JsonataResponse rj) {
+                      return new JSONataResponse(
                           rj.requestExpression,
                           Jsonata.jsonata(rj.requestExpression),
                           rj.responseExpression,
                           Jsonata.jsonata(rj.responseExpression));
+                    } else if (r instanceof JsonataErrorResponse er) {
+                      return new JSONataErrorResponse(
+                          er.requestExpression,
+                          Jsonata.jsonata(er.requestExpression),
+                          er.responseStatusCode,
+                          er.responseMessage);
                     } else {
                       throw new IllegalArgumentException(
                           "Unimplemented request type: " + r.getClass());
@@ -122,12 +128,22 @@ class JsonataRpcService {
         if (Boolean.TRUE.equals(jResult)) {
           LOG.info("Found matching request: '{}'", r.request());
 
-          final var response = Functions.string(r.response().evaluate(requestJson), false);
-          LOG.debug("Generated response: '{}'", response);
+          if (r instanceof JSONataResponse jr) {
+            final var response = Functions.string(jr.response().evaluate(requestJson), false);
+            LOG.debug("Generated response: '{}'", response);
 
-          responseObserver.onNext(response);
-          responseObserver.onCompleted();
-          return;
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+            return;
+          } else if (r instanceof JSONataErrorResponse jer) {
+            responseObserver.onError(
+                Status.fromCodeValue(jer.responseStatusCode)
+                    .augmentDescription(jer.responseMessage)
+                    .asException());
+            return;
+          } else {
+            throw new RuntimeException("Unexepcted code path");
+          }
         }
       }
 
@@ -136,8 +152,19 @@ class JsonataRpcService {
       responseObserver.onError(Status.NOT_FOUND.asException());
     }
 
-    private static record JSONataRequest(
-        String requestString, Jsonata request, String responseString, Jsonata response) {}
+    private static record JSONataResponse(
+        String requestString, Jsonata request, String responseString, Jsonata response)
+        implements JSONataRequest {}
+
+    private static record JSONataErrorResponse(
+        String requestString, Jsonata request, int responseStatusCode, String responseMessage)
+        implements JSONataRequest {}
+
+    private static sealed interface JSONataRequest {
+      String requestString();
+
+      Jsonata request();
+    }
   }
 
   /** Wrapping Marshaller which transforms GRPC type into JSON */
