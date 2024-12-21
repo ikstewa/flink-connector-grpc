@@ -31,7 +31,6 @@ import org.apache.flink.table.connector.format.DecodingFormat;
 import org.apache.flink.table.connector.format.EncodingFormat;
 import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.connector.source.LookupTableSource;
-import org.apache.flink.table.connector.source.abilities.SupportsLimitPushDown;
 import org.apache.flink.table.connector.source.abilities.SupportsProjectionPushDown;
 import org.apache.flink.table.connector.source.abilities.SupportsReadingMetadata;
 import org.apache.flink.table.connector.source.lookup.AsyncLookupFunctionProvider;
@@ -41,10 +40,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 
 class GrpcLookupTableSource
-    implements LookupTableSource,
-        SupportsProjectionPushDown,
-        SupportsLimitPushDown,
-        SupportsReadingMetadata {
+    implements LookupTableSource, SupportsProjectionPushDown, SupportsReadingMetadata {
 
   private final GrpcServiceOptions grpcConfig;
   private DataType physicalRowDataType;
@@ -117,9 +113,6 @@ class GrpcLookupTableSource
   public boolean supportsNestedProjection() {
     return true;
   }
-
-  @Override
-  public void applyLimit(long limit) {}
 
   @Override
   public Map<String, DataType> listReadableMetadata() {
