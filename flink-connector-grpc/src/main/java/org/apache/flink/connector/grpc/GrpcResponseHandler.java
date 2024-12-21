@@ -15,10 +15,16 @@
 //
 package org.apache.flink.connector.grpc;
 
+import io.grpc.StatusRuntimeException;
 import java.io.Serializable;
-import java.util.function.BiFunction;
-import org.apache.flink.table.data.RowData;
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
-/** Marker interface to ensure the RowData combiner method is serializable. */
-interface ResultRowBuilder extends BiFunction<RowData, RowData, RowData>, Serializable {}
-;
+/**
+ * Responsible for mapping from a deserialized request/response and creating the final produced row
+ * returned
+ */
+interface GrpcResponseHandler<ReqT, RespT, ProducedT> extends Serializable {
+  ProducedT handle(
+      @Nonnull ReqT request, @Nullable RespT response, @Nullable StatusRuntimeException err);
+}
