@@ -124,6 +124,29 @@ CREATE TABLE Greeter (
 );
 ```
 
+### Metadata
+
+The following metadata fields are available:
+
+| Key | Data Type | Description |
+| --- | --- | --- |
+| `status_code` | INT NOT NULL | The GRPC response status code |
+
+```roomsql
+CREATE TABLE Greeter (
+  name STRING,
+  message STRING,
+  grpc_status_code INT METADATA FROM 'status_code',
+) WITH (
+  'connector' = 'grpc-lookup',
+  'host' = 'grpc-server',
+  'port' = '50051',
+  'use-plain-text' = 'true',
+  'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod'
+);
+```
+
+
 # Development
 
 ## Publish
