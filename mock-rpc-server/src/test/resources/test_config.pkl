@@ -1,5 +1,7 @@
 amends "MockServer.pkl"
 
+port = 50055
+
 services {
   new {
     name = "SayHello"

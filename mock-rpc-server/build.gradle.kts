@@ -23,8 +23,8 @@ repositories {
 }
 
 dependencies {
-    api(platform("org.apache.logging.log4j:log4j-bom:2.24.1"))
-    api(platform("io.grpc:grpc-bom:1.68.1"))
+    api(platform("org.apache.logging.log4j:log4j-bom:2.24.3"))
+    api(platform("io.grpc:grpc-bom:1.69.0"))
     api(platform("com.google.protobuf:protobuf-bom:3.25.3"))
 
     implementation("org.pkl-lang:pkl-config-java:0.27.1")
@@ -152,7 +152,7 @@ signing {
 
 protobuf {
     protoc {
-        artifact = "com.google.protobuf:protoc:3.25.3"
+        artifact = "com.google.protobuf:protoc:3.25.5"
     }
     plugins {
         create("grpc") {
