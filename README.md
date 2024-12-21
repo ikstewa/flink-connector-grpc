@@ -136,7 +136,7 @@ The following metadata fields are available:
 CREATE TABLE Greeter (
   name STRING,
   message STRING,
-  grpc_status_code INT METADATA FROM 'status_code',
+  grpc_status_code INT METADATA FROM 'status_code'
 ) WITH (
   'connector' = 'grpc-lookup',
   'host' = 'grpc-server',
