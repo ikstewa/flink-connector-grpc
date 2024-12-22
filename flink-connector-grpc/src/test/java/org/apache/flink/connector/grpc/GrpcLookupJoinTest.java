@@ -339,7 +339,7 @@ class GrpcLookupJoinTest {
               PROCTIME() AS proc_time) E
           JOIN Greeter FOR SYSTEM_TIME AS OF E.proc_time AS G
             ON E.name = G.name
-        WHERE G.grpc_status_code == ;""";
+        WHERE G.grpc_status_code = 0;""";
 
     final var successResults = ImmutableList.copyOf(env.executeSql(sql).collect());
 
