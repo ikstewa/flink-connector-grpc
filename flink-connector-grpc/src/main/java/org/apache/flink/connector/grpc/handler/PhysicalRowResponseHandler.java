@@ -26,9 +26,9 @@ import org.apache.flink.table.types.DataType;
 /**
  * Response handler for a base Lookup Join row which has the request and response as a single row.
  */
-public interface CombinedRowResponseHandler extends GrpcResponseHandler<RowData, RowData, RowData> {
+public interface PhysicalRowResponseHandler extends GrpcResponseHandler<RowData, RowData, RowData> {
 
-  static CombinedRowResponseHandler fromProjection(
+  static PhysicalRowResponseHandler fromProjection(
       Projection reqProjection, Projection respProjection, DataType physicalRow) {
     // Create a data type that represents `new JoinedRowData(req, resp)`
     final DataType source = Projections.concat(reqProjection, respProjection).project(physicalRow);

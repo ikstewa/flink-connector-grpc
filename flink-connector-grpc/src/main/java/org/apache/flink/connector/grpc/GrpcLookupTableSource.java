@@ -22,7 +22,7 @@ import java.util.stream.Stream;
 import javax.annotation.Nullable;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.serialization.SerializationSchema;
-import org.apache.flink.connector.grpc.handler.CombinedRowResponseHandler;
+import org.apache.flink.connector.grpc.handler.PhysicalRowResponseHandler;
 import org.apache.flink.connector.grpc.handler.GrpcResponseHandler;
 import org.apache.flink.connector.grpc.handler.JoinedResponseHandler;
 import org.apache.flink.connector.grpc.handler.MetadataResponseHandler;
@@ -96,7 +96,7 @@ class GrpcLookupTableSource
     // Create the response handler to compose the final produced row
     final GrpcResponseHandler<RowData, RowData, RowData> responseHandler =
         new JoinedResponseHandler<>(
-            CombinedRowResponseHandler.fromProjection(
+            PhysicalRowResponseHandler.fromProjection(
                 reqProjection, respProjection, this.physicalRowDataType),
             new MetadataResponseHandler(this.metadataFields));
 
