@@ -83,12 +83,12 @@ class GrpcLookupTableSource
   @Override
   public LookupRuntimeProvider getLookupRuntimeProvider(LookupContext lookupContext) {
     // Create projections from physical data type to request/response types
-    final var reqProjection =
+    final int[][] reqProjection =
         Projections.trim(
                 Projection.of(lookupContext.getKeys()),
                 DataType.getFieldCount(this.physicalRowDataType)) // exclude extra metadata fields
             .toNestedIndexes();
-    final var respProjection =
+    final int[][] respProjection =
         Projection.of(reqProjection).complement(this.physicalRowDataType).toNestedIndexes();
 
     // Create a projection from `new JoinedRowData(req, resp)` -> `physicalRowDataType`
