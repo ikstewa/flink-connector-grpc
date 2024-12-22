@@ -85,11 +85,11 @@ class GrpcLookupTableSource
     // Create projections from physical data type to request/response types
     final var reqProjection =
         Projections.trim(
-            Projection.of(lookupContext.getKeys()),
-            DataType.getFieldCount(this.physicalRowDataType)); // exclude metadata fields
-    final int reqFieldCount = reqProjection.toTopLevelIndexes().length;
-    final var respProjection = reqProjection.complement(this.physicalRowDataType);
-    final int respFieldCount = respProjection.toTopLevelIndexes().length;
+                Projection.of(lookupContext.getKeys()),
+                DataType.getFieldCount(this.physicalRowDataType)) // exclude extra metadata fields
+            .toNestedIndexes();
+    final var respProjection =
+        Projection.of(reqProjection).complement(this.physicalRowDataType).toNestedIndexes();
 
     // Create a projection from `new JoinedRowData(req, resp)` -> `physicalRowDataType`
     final int[][] joinedProjection =
@@ -101,10 +101,10 @@ class GrpcLookupTableSource
     // Create (de)serializers for GRPC request/response
     final SerializationSchema<RowData> requestSchemaEncoder =
         this.requestFormat.createRuntimeEncoder(
-            null, reqProjection.project(this.physicalRowDataType));
+            null, Projection.of(reqProjection).project(this.physicalRowDataType));
     final DeserializationSchema<RowData> responseSchemaDecoder =
         this.responseFormat.createRuntimeDecoder(
-            lookupContext, respProjection.project(this.physicalRowDataType));
+            lookupContext, Projection.of(respProjection).project(this.physicalRowDataType));
 
     // Create the metadata response handler
     final var metaHandler = new MetadataResponseHandler(this.metadataFields);
@@ -115,8 +115,9 @@ class GrpcLookupTableSource
           final var joinedRow =
               new JoinedRowData(
                   // Filter metadata from request row, extracted later
-                  ProjectedRowData.from(Projection.range(0, reqFieldCount)).replaceRow(reqRow),
-                  respRow != null ? respRow : new GenericRowData(respFieldCount));
+                  ProjectedRowData.from(Projection.range(0, reqProjection.length))
+                      .replaceRow(reqRow),
+                  respRow != null ? respRow : new GenericRowData(respProjection.length));
           final var physicalRow = ProjectedRowData.from(joinedProjection).replaceRow(joinedRow);
           final var metadataRow = metaHandler.handle(reqRow, respRow, error);
           return new JoinedRowData(physicalRow, metadataRow);
