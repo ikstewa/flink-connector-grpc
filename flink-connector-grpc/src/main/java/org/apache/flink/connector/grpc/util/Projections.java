@@ -19,6 +19,9 @@ import java.util.stream.Stream;
 import org.apache.flink.table.connector.Projection;
 
 public final class Projections {
+
+  private Projections() {}
+
   // Utility method to create a joined Projection similar to JoinedRowData
   public static Projection concat(Projection left, Projection right) {
     final int[][] indexes =
