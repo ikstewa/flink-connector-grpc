@@ -12,6 +12,10 @@ The primary use case for the gRPC connector is to be used in a [Lookup Join](htt
 * Sink - Add Table Sink support to egress via gRPC
 * Auth - Currently assuming internal private networks
 * GRPC Retry Policy - Better customization of the GRPC retry policy
+* Configurable error codes (which to fail on)
+* Cacheable error codes (configurable)
+* Wrapped request/response types
+* De-duplicate requests
 
 ## Example Usage
 
@@ -119,6 +123,32 @@ CREATE TABLE Greeter (
   'response.protobuf.message-class-name' = 'io.grpc.examples.helloworld.HelloReply'
 );
 ```
+
+### Metadata
+
+The following metadata fields are available:
+
+| Key | Data Type | Description |
+| --- | --- | --- |
+| `status-code` | INT NOT NULL | The GRPC response status code |
+| `status-description` | STRING | The GRPC response status description. Includes only non-OK responses. |
+| `status-trailers` | MAP<STRING NOT NULL, STRING> NOT NULL | The GRPC response trailers for non-OK responses. Includes only string value fields. |
+| `status-trailers-bin` | MAP<STRING NOT NULL, VARBINARY> NOT NULL | The GRPC response trailers for non-OK responses. Includes only binary value fields. |
+
+```roomsql
+CREATE TABLE Greeter (
+  name STRING,
+  message STRING,
+  grpc_status_code INT METADATA FROM 'status_code'
+) WITH (
+  'connector' = 'grpc-lookup',
+  'host' = 'grpc-server',
+  'port' = '50051',
+  'use-plain-text' = 'true',
+  'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod'
+);
+```
+
 
 # Development
 

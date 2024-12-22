@@ -22,6 +22,7 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
+import io.grpc.StatusRuntimeException;
 import io.grpc.stub.ClientCalls;
 import io.grpc.stub.StreamObserver;
 import java.io.ByteArrayInputStream;
@@ -31,10 +32,12 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.serialization.SerializationSchema;
+import org.apache.flink.connector.grpc.handler.GrpcResponseHandler;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.functions.AsyncLookupFunction;
 import org.apache.flink.table.functions.FunctionContext;
@@ -70,7 +73,7 @@ public class GrpcLookupFunction extends AsyncLookupFunction {
   private final GrpcServiceOptions grpcConfig;
   private final SerializationSchema<RowData> requestSchema;
   private final DeserializationSchema<RowData> responseSchema;
-  private final ResultRowBuilder resultBuilder;
+  private final GrpcResponseHandler<RowData, RowData, RowData> responseHandler;
 
   private transient ManagedChannel channel;
   private transient MethodDescriptor<RowData, RowData> grpcService;
@@ -79,41 +82,22 @@ public class GrpcLookupFunction extends AsyncLookupFunction {
 
   public GrpcLookupFunction(
       GrpcServiceOptions grpcConfig,
-      ResultRowBuilder resultBuilder,
+      GrpcResponseHandler<RowData, RowData, RowData> responseHandler,
       SerializationSchema<RowData> requestSchema,
       DeserializationSchema<RowData> responseSchema) {
     this.grpcConfig = grpcConfig;
     this.requestSchema = requestSchema;
     this.responseSchema = responseSchema;
-    this.resultBuilder = resultBuilder;
+    this.responseHandler = responseHandler;
   }
 
   @Override
-  @SuppressWarnings("unchecked")
   public void open(FunctionContext context) throws Exception {
     super.open(context);
     this.requestSchema.open(null);
     this.responseSchema.open(null);
 
-    var channelBuilder =
-        ManagedChannelBuilder.forAddress(this.grpcConfig.url(), this.grpcConfig.port());
-    if (this.grpcConfig.maxRetryTimes() > 0) {
-      final var serviceConfig =
-          String.format(RETRY_SERVICE_CONFIG, this.grpcConfig.maxRetryTimes());
-      channelBuilder =
-          channelBuilder
-              .defaultServiceConfig(new Gson().fromJson(serviceConfig, Map.class))
-              .enableRetry()
-              .maxRetryAttempts(this.grpcConfig.maxRetryTimes());
-    } else {
-      LOG.warn("'lookup.max-retries' set to 0. Disabling retries..");
-      channelBuilder = channelBuilder.disableRetry();
-    }
-    if (this.grpcConfig.usePlainText()) {
-      channelBuilder = channelBuilder.usePlaintext();
-    }
-    channelBuilder = channelBuilder.maxInboundMessageSize(Integer.MAX_VALUE);
-    this.channel = channelBuilder.build();
+    this.channel = buildChannel(this.grpcConfig);
 
     // MethodDescriptor is not serializable so re-build on open
     final var marshaller = new RequestMarshaller(this.requestSchema, this.responseSchema);
@@ -136,6 +120,27 @@ public class GrpcLookupFunction extends AsyncLookupFunction {
         .gauge("grpc-table-lookup-call-error", () -> grpcErrorCounter.intValue());
   }
 
+  @SuppressWarnings("unchecked")
+  private static ManagedChannel buildChannel(GrpcServiceOptions grpcConfig) {
+    var channelBuilder = ManagedChannelBuilder.forAddress(grpcConfig.url(), grpcConfig.port());
+    if (grpcConfig.maxRetryTimes() > 0) {
+      final var serviceConfig = String.format(RETRY_SERVICE_CONFIG, grpcConfig.maxRetryTimes());
+      channelBuilder =
+          channelBuilder
+              .defaultServiceConfig(new Gson().fromJson(serviceConfig, Map.class))
+              .enableRetry()
+              .maxRetryAttempts(grpcConfig.maxRetryTimes());
+    } else {
+      LOG.warn("'lookup.max-retries' set to 0. Disabling retries..");
+      channelBuilder = channelBuilder.disableRetry();
+    }
+    if (grpcConfig.usePlainText()) {
+      channelBuilder = channelBuilder.usePlaintext();
+    }
+    channelBuilder = channelBuilder.maxInboundMessageSize(Integer.MAX_VALUE);
+    return channelBuilder.build();
+  }
+
   @Override
   public void close() throws Exception {
     this.channel.shutdown();
@@ -148,7 +153,14 @@ public class GrpcLookupFunction extends AsyncLookupFunction {
     final var fut = new CompletableFuture<RowData>();
     ClientCalls.asyncUnaryCall(
         channel.newCall(this.grpcService, CallOptions.DEFAULT), keyRow, new UnaryHandler<>(fut));
-    return fut.thenApply(r -> List.of(this.resultBuilder.apply(keyRow, r)));
+    return fut.handle(
+        (r, err) -> {
+          if (err != null && !(err instanceof StatusRuntimeException)) {
+            throw new CompletionException(err);
+          } else {
+            return List.of(this.responseHandler.handle(keyRow, r, (StatusRuntimeException) err));
+          }
+        });
   }
 
   /** Internal GRPC marshaller which uses a SerializationSchema to convert RowData to bytes. */
@@ -179,7 +191,7 @@ public class GrpcLookupFunction extends AsyncLookupFunction {
   }
 
   /** StreamObserver for GRPC to convert to a CompletableFuture. */
-  public class UnaryHandler<T> implements StreamObserver<T> {
+  private class UnaryHandler<T> implements StreamObserver<T> {
     private T result;
     private final CompletableFuture<T> future;
 
