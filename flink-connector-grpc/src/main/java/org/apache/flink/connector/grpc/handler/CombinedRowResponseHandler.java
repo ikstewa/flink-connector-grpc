@@ -15,7 +15,7 @@
 //
 package org.apache.flink.connector.grpc.handler;
 
-import java.util.stream.Stream;
+import org.apache.flink.connector.grpc.util.Projections;
 import org.apache.flink.table.connector.Projection;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
@@ -31,28 +31,18 @@ public interface CombinedRowResponseHandler extends GrpcResponseHandler<RowData,
   static CombinedRowResponseHandler fromProjection(
       Projection reqProjection, Projection respProjection, DataType physicalRow) {
     // Create a data type that represents `new JoinedRowData(req, resp)`
-    final DataType source = concatProjection(reqProjection, respProjection).project(physicalRow);
+    final DataType source = Projections.concat(reqProjection, respProjection).project(physicalRow);
 
     // Create a projection from source -> physicalRow
-    final int[][] successProjection =
+    final int[][] joinedProjection =
         Projection.fromFieldNames(source, DataType.getFieldNames(physicalRow)).toNestedIndexes();
 
     final int respFieldCount = respProjection.toTopLevelIndexes().length;
 
     return (reqRow, respRow, error) ->
-        ProjectedRowData.from(successProjection)
+        ProjectedRowData.from(joinedProjection)
             .replaceRow(
                 new JoinedRowData(
                     reqRow, respRow != null ? respRow : new GenericRowData(respFieldCount)));
-  }
-
-  // Utility method to create a joined Projection similar to JoinedRowData
-  private static Projection concatProjection(Projection left, Projection right) {
-    final int[][] indexes =
-        Stream.of(left, right)
-            .map(Projection::toNestedIndexes)
-            .flatMap(Stream::of)
-            .toArray(int[][]::new);
-    return Projection.of(indexes);
   }
 }

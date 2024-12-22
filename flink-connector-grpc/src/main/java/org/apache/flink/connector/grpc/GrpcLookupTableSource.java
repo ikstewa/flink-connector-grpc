@@ -81,7 +81,7 @@ class GrpcLookupTableSource
   @Override
   public LookupRuntimeProvider getLookupRuntimeProvider(LookupContext lookupContext) {
 
-    // Create projections from physical data type to to request/response types
+    // Create projections from physical data type to request/response types
     final var reqProjection = Projection.of(lookupContext.getKeys());
     final var respProjection = Projection.all(this.physicalRowDataType).difference(reqProjection);
 
