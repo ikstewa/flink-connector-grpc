@@ -43,10 +43,10 @@ class GrpcLookupTableSource
     implements LookupTableSource, SupportsProjectionPushDown, SupportsReadingMetadata {
 
   private final GrpcServiceOptions grpcConfig;
-  private DataType physicalRowDataType;
   private final EncodingFormat<SerializationSchema<RowData>> requestFormat;
   private final DecodingFormat<DeserializationSchema<RowData>> responseFormat;
   @Nullable private final LookupCache cache;
+  private DataType physicalRowDataType;
   private List<GrpcMetadataField> metadataFields;
 
   GrpcLookupTableSource(
@@ -80,18 +80,25 @@ class GrpcLookupTableSource
 
   @Override
   public LookupRuntimeProvider getLookupRuntimeProvider(LookupContext lookupContext) {
-    final CombinedRowResponseHandler rowResponseHandler =
-        CombinedRowResponseHandler.fromLookupContext(this.physicalRowDataType, lookupContext);
 
+    // Create projections from physical data type to to request/response types
+    final var reqProjection = Projection.of(lookupContext.getKeys());
+    final var respProjection = Projection.all(this.physicalRowDataType).difference(reqProjection);
+
+    // Create (de)serializers for GRPC request/response
     final SerializationSchema<RowData> requestSchemaEncoder =
-        this.requestFormat.createRuntimeEncoder(null, rowResponseHandler.requestType());
-
+        this.requestFormat.createRuntimeEncoder(
+            null, reqProjection.project(this.physicalRowDataType));
     final DeserializationSchema<RowData> responseSchemaDecoder =
-        this.responseFormat.createRuntimeDecoder(lookupContext, rowResponseHandler.responseType());
+        this.responseFormat.createRuntimeDecoder(
+            lookupContext, respProjection.project(this.physicalRowDataType));
 
+    // Create the response handler to compose the final produced row
     final GrpcResponseHandler<RowData, RowData, RowData> responseHandler =
         new JoinedResponseHandler<>(
-            rowResponseHandler, new MetadataResponseHandler(this.metadataFields));
+            CombinedRowResponseHandler.fromProjection(
+                reqProjection, respProjection, this.physicalRowDataType),
+            new MetadataResponseHandler(this.metadataFields));
 
     final var lookupFunc =
         new GrpcLookupFunction(

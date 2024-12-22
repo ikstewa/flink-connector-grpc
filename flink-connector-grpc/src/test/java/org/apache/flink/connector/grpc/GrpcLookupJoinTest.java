@@ -199,13 +199,12 @@ class GrpcLookupJoinTest {
     env.executeSql(
         """
       CREATE TABLE Greeter (
-        message STRING,
-        tenant_id STRING,
         grpc_status_code INT METADATA FROM 'status-code',
         grpc_status_desc STRING METADATA FROM 'status-description',
+        message STRING,
         grpc_status_trailers MAP<STRING NOT NULL, STRING> METADATA FROM 'status-trailers',
-        grpc_status_trailers_bin MAP<STRING NOT NULL, STRING> METADATA FROM 'status-trailers-bin',
-        name STRING
+        name STRING,
+        grpc_status_trailers_bin MAP<STRING NOT NULL, STRING> METADATA FROM 'status-trailers-bin'
       ) WITH (
         'connector' = 'grpc-lookup',
         'host' = 'localhost',
