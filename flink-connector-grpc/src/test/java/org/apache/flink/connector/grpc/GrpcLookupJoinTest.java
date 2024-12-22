@@ -390,20 +390,19 @@ class GrpcLookupJoinTest {
         """
         SELECT
           E.name AS name,
-          G.message AS message,
-          G.grpc_status_code
+          G.message AS message
         FROM (
-          SELECT
-              'Fred' AS name,
-              PROCTIME() AS proc_time) E
+          SELECT 'FAIL_ME' AS name, PROCTIME() AS proc_time
+          UNION SELECT 'Fred' AS name, PROCTIME() AS proc_time
+        ) E
         JOIN Greeter FOR SYSTEM_TIME AS OF E.proc_time AS G
           ON E.name = G.name
         WHERE G.grpc_status_code = 0;""";
 
     final var successResults = ImmutableList.copyOf(env.executeSql(sql).collect());
 
-    Truth.assertThat(successResults).containsExactly(Row.of("Fred", "Hello Fred", 0));
-    Truth.assertThat(this.grpcRequestCounter.get()).isEqualTo(1);
+    Truth.assertThat(successResults).containsExactly(Row.of("Fred", "Hello Fred"));
+    Truth.assertThat(this.grpcRequestCounter.get()).isEqualTo(2);
   }
 
   @Test
