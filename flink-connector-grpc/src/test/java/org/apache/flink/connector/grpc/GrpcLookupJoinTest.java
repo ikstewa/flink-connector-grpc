@@ -37,7 +37,6 @@ import org.apache.flink.types.Row;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -292,17 +291,16 @@ class GrpcLookupJoinTest {
   }
 
   @Test
-  @Disabled
-  @DisplayName("Supports nesting reponse as row")
-  void testNestedRowResponse() {
+  @DisplayName("Handles not null on failure")
+  void testNullableFailure() {
     final EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
     final TableEnvironment env = TableEnvironment.create(settings);
 
     env.executeSql(
         """
       CREATE TABLE Greeter (
-        message STRING,
-        response ROW<name STRING NOT NULL>,
+        message STRING NOT NULL,
+        name STRING NOT NULL,
         grpc_status_code INT METADATA FROM 'status-code'
       ) WITH (
         'connector' = 'grpc-lookup',
@@ -312,22 +310,40 @@ class GrpcLookupJoinTest {
         'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod'
       );""");
 
-    final var sql =
+    final var failedSql =
         """
         SELECT
           E.name AS name,
-          G.message AS message,
           G.grpc_status_code
         FROM (
           SELECT
               'FAIL_ME' AS name,
               PROCTIME() AS proc_time) E
           JOIN Greeter FOR SYSTEM_TIME AS OF E.proc_time AS G
-            ON E.name = G.name;""";
+            ON E.name = G.name
+        WHERE G.grpc_status_code <> 0;""";
 
-    final var results = ImmutableList.copyOf(env.executeSql(sql).collect());
+    final var failedResults = ImmutableList.copyOf(env.executeSql(failedSql).collect());
 
-    Truth.assertThat(results).containsExactly(Row.of("FAIL_ME", null, 3));
+    Truth.assertThat(failedResults).containsExactly(Row.of("FAIL_ME", 3));
+
+    final var sql =
+        """
+        SELECT
+          E.name AS name,
+          E.message AS message,
+          G.grpc_status_code
+        FROM (
+          SELECT
+              'Fred' AS name,
+              PROCTIME() AS proc_time) E
+          JOIN Greeter FOR SYSTEM_TIME AS OF E.proc_time AS G
+            ON E.name = G.name
+        WHERE G.grpc_status_code == ;""";
+
+    final var successResults = ImmutableList.copyOf(env.executeSql(sql).collect());
+
+    Truth.assertThat(successResults).containsExactly(Row.of("Fred", "Hello Fred", 0));
   }
 
   @Test
