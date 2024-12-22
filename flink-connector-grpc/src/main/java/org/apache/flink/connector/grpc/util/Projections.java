@@ -28,4 +28,11 @@ public final class Projections {
             .toArray(int[][]::new);
     return Projection.of(indexes);
   }
+
+  // Removes all fields which exceed the max field count
+  public static Projection trim(Projection proj, int maxFields) {
+    final int[][] indexes =
+        Stream.of(proj.toNestedIndexes()).filter(idx -> idx[0] < maxFields).toArray(int[][]::new);
+    return Projection.of(indexes);
+  }
 }

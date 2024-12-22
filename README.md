@@ -15,6 +15,7 @@ The primary use case for the gRPC connector is to be used in a [Lookup Join](htt
 * Configurable error codes (which to fail on)
 * Cacheable error codes (configurable)
 * Wrapped request/response types
+* De-duplicate requests
 
 ## Example Usage
 

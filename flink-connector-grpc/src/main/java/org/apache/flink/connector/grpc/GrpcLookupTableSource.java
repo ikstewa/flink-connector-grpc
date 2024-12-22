@@ -82,10 +82,13 @@ class GrpcLookupTableSource
 
   @Override
   public LookupRuntimeProvider getLookupRuntimeProvider(LookupContext lookupContext) {
-
     // Create projections from physical data type to request/response types
-    final var reqProjection = Projection.of(lookupContext.getKeys());
-    final var respProjection = Projection.all(this.physicalRowDataType).difference(reqProjection);
+    final var reqProjection =
+        Projections.trim(
+            Projection.of(lookupContext.getKeys()),
+            DataType.getFieldCount(this.physicalRowDataType)); // exclude metadata fields
+    final int reqFieldCount = reqProjection.toTopLevelIndexes().length;
+    final var respProjection = reqProjection.complement(this.physicalRowDataType);
     final int respFieldCount = respProjection.toTopLevelIndexes().length;
 
     // Create a projection from `new JoinedRowData(req, resp)` -> `physicalRowDataType`
@@ -109,11 +112,12 @@ class GrpcLookupTableSource
     // Create the response handler to compose the final produced row
     final GrpcResponseHandler<RowData, RowData, RowData> responseHandler =
         (reqRow, respRow, error) -> {
-          final var physicalRow =
-              ProjectedRowData.from(joinedProjection)
-                  .replaceRow(
-                      new JoinedRowData(
-                          reqRow, respRow != null ? respRow : new GenericRowData(respFieldCount)));
+          final var joinedRow =
+              new JoinedRowData(
+                  // Filter metadata from request row, extracted later
+                  ProjectedRowData.from(Projection.range(0, reqFieldCount)).replaceRow(reqRow),
+                  respRow != null ? respRow : new GenericRowData(respFieldCount));
+          final var physicalRow = ProjectedRowData.from(joinedProjection).replaceRow(joinedRow);
           final var metadataRow = metaHandler.handle(reqRow, respRow, error);
           return new JoinedRowData(physicalRow, metadataRow);
         };
