@@ -15,6 +15,7 @@
 //
 package org.apache.flink.connector.grpc;
 
+import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.truth.Truth;
 import io.grpc.Grpc;
@@ -35,6 +36,7 @@ import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.test.util.MiniClusterWithClientResource;
 import org.apache.flink.types.Row;
+import org.apache.flink.util.SerializedThrowable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
@@ -403,6 +405,97 @@ class GrpcLookupJoinTest {
 
     Truth.assertThat(successResults).containsExactly(Row.of("Fred", "Hello Fred"));
     Truth.assertThat(this.grpcRequestCounter.get()).isEqualTo(2);
+  }
+
+  @Test
+  @DisplayName("Retries non-error status codes")
+  void testRetries() {
+    final EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
+    final TableEnvironment env = TableEnvironment.create(settings);
+
+    env.executeSql(
+        """
+      CREATE TABLE Greeter (
+        grpc_status_code INT METADATA FROM 'status-code',
+        message STRING NOT NULL,
+        name STRING NOT NULL
+      ) WITH (
+        'connector' = 'grpc-lookup',
+        'host' = 'localhost',
+        'port' = '50051',
+        'use-plain-text' = 'true',
+        'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod',
+        'grpc-retry-codes' = '1;3',
+        'grpc-error-codes' = '16',
+        'lookup.max-retries' = '4'
+      );""");
+
+    final var sql =
+        """
+        SELECT
+          E.name,
+          G.grpc_status_code
+        FROM (
+          SELECT 'FAIL_ME' AS name, PROCTIME() AS proc_time
+        ) E
+        JOIN Greeter FOR SYSTEM_TIME AS OF E.proc_time AS G
+          ON E.name = G.name""";
+
+    final var successResults = ImmutableList.copyOf(env.executeSql(sql).collect());
+
+    Truth.assertThat(successResults).containsExactly(Row.of("FAIL_ME", 3));
+    Truth.assertThat(this.grpcRequestCounter.get()).isEqualTo(4);
+  }
+
+  @Test
+  @DisplayName("Retries error status codes")
+  void testRetriesErrors() {
+    final EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
+    final TableEnvironment env = TableEnvironment.create(settings);
+
+    env.executeSql(
+        """
+      CREATE TABLE Greeter (
+        grpc_status_code INT METADATA FROM 'status-code',
+        message STRING NOT NULL,
+        name STRING NOT NULL
+      ) WITH (
+        'connector' = 'grpc-lookup',
+        'host' = 'localhost',
+        'port' = '50051',
+        'use-plain-text' = 'true',
+        'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod',
+        'grpc-retry-codes' = '1;3',
+        'grpc-error-codes' = '3;4',
+        'lookup.max-retries' = '4'
+      );""");
+
+    final var sql =
+        """
+        SELECT
+          E.name,
+          G.grpc_status_code
+        FROM (
+          SELECT 'FAIL_ME' AS name, PROCTIME() AS proc_time
+        ) E
+        JOIN Greeter FOR SYSTEM_TIME AS OF E.proc_time AS G
+          ON E.name = G.name""";
+
+    final Exception error =
+        Assertions.assertThrows(Exception.class, () -> env.executeSql(sql).await());
+    Truth.assertThat(Throwables.getRootCause(error).toString())
+        .isEqualTo(
+            "io.grpc.StatusRuntimeException: io.grpc.StatusRuntimeException: INVALID_ARGUMENT: I WAS TOLD TO FAIL");
+
+    Truth.assertThat(this.grpcRequestCounter.get()).isEqualTo(4);
+  }
+
+  private Throwable getRootCause(Throwable err) {
+    final var root = Throwables.getRootCause(err);
+    if (err instanceof org.apache.flink.util.SerializedThrowable) {
+      return getRootCause(SerializedThrowable.get(err, ClassLoader.getSystemClassLoader()));
+    }
+    return root;
   }
 
   @Test

@@ -11,8 +11,6 @@ The primary use case for the gRPC connector is to be used in a [Lookup Join](htt
 
 * Sink - Add Table Sink support to egress via gRPC
 * Auth - Currently assuming internal private networks
-* GRPC Retry Policy - Better customization of the GRPC retry policy
-* Configurable error codes (which to fail on)
 * Cacheable error codes (configurable)
 * Wrapped request/response types
 * De-duplicate requests
@@ -123,6 +121,24 @@ CREATE TABLE Greeter (
   'response.protobuf.message-class-name' = 'io.grpc.examples.helloworld.HelloReply'
 );
 ```
+
+Failure/retryable status codes can be configured:
+
+```roomsql
+CREATE TABLE Greeter (
+  name STRING,
+  message STRING
+) WITH (
+  'connector' = 'grpc-lookup',
+  'host' = 'grpc-server',
+  'port' = '50051',
+  'use-plain-text' = 'true',
+  'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod',
+  'grpc-retry-codes' = '1;2;4;8;10;13;14',
+  'grpc-error-codes' = '1;2;3;4;6;7;8;9;10;11;12;13;14;15;16'
+);
+```
+
 
 ### Metadata
 

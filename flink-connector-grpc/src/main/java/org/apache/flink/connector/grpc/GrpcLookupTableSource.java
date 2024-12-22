@@ -109,18 +109,24 @@ class GrpcLookupTableSource
     // Create the metadata response handler
     final var metaHandler = new MetadataResponseHandler(this.metadataFields);
 
+    final var errorCodes = grpcConfig.errorStatusCodes();
+
     // Create the response handler to compose the final produced row
     final GrpcResponseHandler<RowData, RowData, RowData> responseHandler =
         (reqRow, respRow, error) -> {
-          final var joinedRow =
-              new JoinedRowData(
-                  // Filter metadata from request row, extracted later
-                  ProjectedRowData.from(Projection.range(0, reqProjection.length))
-                      .replaceRow(reqRow),
-                  respRow != null ? respRow : new GenericRowData(respProjection.length));
-          final var physicalRow = ProjectedRowData.from(joinedProjection).replaceRow(joinedRow);
-          final var metadataRow = metaHandler.handle(reqRow, respRow, error);
-          return new JoinedRowData(physicalRow, metadataRow);
+          if (error != null && errorCodes.contains(error.getStatus().getCode().value())) {
+            throw error;
+          } else {
+            final var joinedRow =
+                new JoinedRowData(
+                    // Filter metadata from request row, extracted later
+                    ProjectedRowData.from(Projection.range(0, reqProjection.length))
+                        .replaceRow(reqRow),
+                    respRow != null ? respRow : new GenericRowData(respProjection.length));
+            final var physicalRow = ProjectedRowData.from(joinedProjection).replaceRow(joinedRow);
+            final var metadataRow = metaHandler.handle(reqRow, respRow, error);
+            return new JoinedRowData(physicalRow, metadataRow);
+          }
         };
 
     final var lookupFunc =
