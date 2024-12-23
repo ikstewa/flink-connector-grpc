@@ -49,22 +49,6 @@ public class GrpcLookupFunction extends AsyncLookupFunction {
 
   private static final Gson GSON = new Gson();
   private static final Logger LOG = LogManager.getLogger(GrpcLookupFunction.class);
-  private static final String RETRY_SERVICE_CONFIG =
-      """
-        {
-          "methodConfig": [
-            {
-              "name": [ { } ],
-              "retryPolicy": {
-                "maxAttempts": %s,
-                "initialBackoff": "0.5s",
-                "maxBackoff": "30s",
-                "backoffMultiplier": 2,
-                "retryableStatusCodes": %s
-              }
-            }
-          ]
-        }""";
 
   private final GrpcServiceOptions grpcConfig;
   private final SerializationSchema<RowData> requestSchema;
