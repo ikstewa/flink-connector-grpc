@@ -32,7 +32,6 @@ import org.apache.flink.table.connector.format.DecodingFormat;
 import org.apache.flink.table.connector.format.EncodingFormat;
 import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.connector.source.LookupTableSource;
-import org.apache.flink.table.connector.source.abilities.SupportsProjectionPushDown;
 import org.apache.flink.table.connector.source.abilities.SupportsReadingMetadata;
 import org.apache.flink.table.connector.source.lookup.AsyncLookupFunctionProvider;
 import org.apache.flink.table.connector.source.lookup.PartialCachingAsyncLookupProvider;
@@ -43,8 +42,7 @@ import org.apache.flink.table.data.utils.JoinedRowData;
 import org.apache.flink.table.data.utils.ProjectedRowData;
 import org.apache.flink.table.types.DataType;
 
-class GrpcLookupTableSource
-    implements LookupTableSource, SupportsProjectionPushDown, SupportsReadingMetadata {
+class GrpcLookupTableSource implements LookupTableSource, SupportsReadingMetadata {
 
   private final GrpcServiceOptions grpcConfig;
   private final EncodingFormat<SerializationSchema<RowData>> requestFormat;
@@ -136,16 +134,6 @@ class GrpcLookupTableSource
     } else {
       return AsyncLookupFunctionProvider.of(lookupFunc);
     }
-  }
-
-  @Override
-  public void applyProjection(int[][] projectedFields, DataType producedDataType) {
-    this.physicalRowDataType = Projection.of(projectedFields).project(physicalRowDataType);
-  }
-
-  @Override
-  public boolean supportsNestedProjection() {
-    return true;
   }
 
   @Override
