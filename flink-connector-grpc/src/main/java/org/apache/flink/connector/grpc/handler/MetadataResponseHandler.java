@@ -27,16 +27,18 @@ import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.MapData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
+import org.apache.flink.table.data.utils.JoinedRowData;
 
-/** Response handler that returns a Row containing only the metadata values. */
-public record MetadataResponseHandler(List<GrpcMetadataField> metaFields)
-    implements GrpcResponseHandler<RowData, RowData, RowData> {
+/** Response handler that amends metadata fields to the end of a delegate response handler */
+public record MetadataResponseHandler<ReqT, RespT>(
+    List<GrpcMetadataField> metaFields, GrpcResponseHandler<ReqT, RespT, RowData> handler)
+    implements GrpcResponseHandler<ReqT, RespT, RowData> {
 
   private static final MapData EMPTY_MAP = new GenericMapData(Map.of());
 
   @Override
-  public RowData handle(RowData request, RowData response, StatusRuntimeException error) {
-    final var row = new GenericRowData(metaFields.size());
+  public RowData handle(ReqT request, RespT response, StatusRuntimeException error) {
+    final var metadataRow = new GenericRowData(metaFields.size());
     for (var i = 0; i < metaFields.size(); i++) {
       final var metaVal =
           switch (metaFields.get(i)) {
@@ -55,9 +57,9 @@ public record MetadataResponseHandler(List<GrpcMetadataField> metaFields)
                     .map(e -> toBinaryMapData(e.getTrailers()))
                     .orElse(EMPTY_MAP);
           };
-      row.setField(i, metaVal);
+      metadataRow.setField(i, metaVal);
     }
-    return row;
+    return new JoinedRowData(handler.handle(request, response, error), metadataRow);
   }
 
   private static MapData toStringMapData(Metadata meta) {
