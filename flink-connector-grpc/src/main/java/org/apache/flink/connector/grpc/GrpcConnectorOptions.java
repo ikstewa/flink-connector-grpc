@@ -17,6 +17,7 @@ package org.apache.flink.connector.grpc;
 
 import static org.apache.flink.table.factories.FactoryUtil.FORMAT_SUFFIX;
 
+import java.util.List;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 
@@ -52,6 +53,45 @@ public final class GrpcConnectorOptions {
           .withDescription(
               "Fully qualified reference to a static method for retrieving a MethodDescriptor. "
                   + " Example: 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod'.");
+
+  // --------------------------------------------------------------------------------------------
+  // GRPC Status code options
+  // --------------------------------------------------------------------------------------------
+  //  Retry
+  //    CANCELLED	1
+  //    UNKNOWN	2
+  //    DEADLINE_EXCEEDED	4
+  //    RESOURCE_EXHAUSTED	8
+  //    ABORTED	10
+  //    INTERNAL	13
+  //    UNAVAILABLE	14
+  //  Error
+  //    INVALID_ARGUMENT	3
+  //    ALREADY_EXISTS	6
+  //    PERMISSION_DENIED	7
+  //    FAILED_PRECONDITION	9
+  //    OUT_OF_RANGE	11
+  //    UNIMPLEMENTED	12
+  //    DATA_LOSS	15
+  //    UNAUTHENTICATED	16
+  //  Other
+  //    OK	0
+  //    NOT_FOUND	5
+
+  public static final ConfigOption<List<Integer>> GRPC_RETRY_CODES =
+      ConfigOptions.key("grpc-retry-codes")
+          .intType()
+          .asList()
+          .defaultValues(1, 2, 4, 8, 10, 13, 14)
+          .withDescription(
+              "List of GRPC status codes that should be treated as errors, separated by semicolon.");
+  public static final ConfigOption<List<Integer>> GRPC_ERROR_CODES =
+      ConfigOptions.key("grpc-error-codes")
+          .intType()
+          .asList()
+          .defaultValues(3, 6, 7, 9, 11, 12, 15, 16)
+          .withDescription(
+              "List of GRPC status codes that should be treated as errors, separated by semicolon.");
 
   // --------------------------------------------------------------------------------------------
   // Format options

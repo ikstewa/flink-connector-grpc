@@ -17,6 +17,7 @@ package org.apache.flink.connector.grpc;
 
 import com.google.common.io.ByteStreams;
 import com.google.gson.Gson;
+import com.google.rpc.Code;
 import io.grpc.CallOptions;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
@@ -46,29 +47,8 @@ import org.apache.logging.log4j.Logger;
 
 public class GrpcLookupFunction extends AsyncLookupFunction {
 
+  private static final Gson GSON = new Gson();
   private static final Logger LOG = LogManager.getLogger(GrpcLookupFunction.class);
-  private static final String RETRY_SERVICE_CONFIG =
-      """
-        {
-          "methodConfig": [
-            {
-              "name": [ { } ],
-              "retryPolicy": {
-                "maxAttempts": %s,
-                "initialBackoff": "0.5s",
-                "maxBackoff": "30s",
-                "backoffMultiplier": 2,
-                "retryableStatusCodes": [
-                  "UNKNOWN",
-                  "UNAVAILABLE",
-                  "INTERNAL",
-                  "PERMISSION_DENIED",
-                  "NOT_FOUND"
-                ]
-              }
-            }
-          ]
-        }""";
 
   private final GrpcServiceOptions grpcConfig;
   private final SerializationSchema<RowData> requestSchema;
@@ -120,14 +100,12 @@ public class GrpcLookupFunction extends AsyncLookupFunction {
         .gauge("grpc-table-lookup-call-error", () -> grpcErrorCounter.intValue());
   }
 
-  @SuppressWarnings("unchecked")
   private static ManagedChannel buildChannel(GrpcServiceOptions grpcConfig) {
     var channelBuilder = ManagedChannelBuilder.forAddress(grpcConfig.url(), grpcConfig.port());
     if (grpcConfig.maxRetryTimes() > 0) {
-      final var serviceConfig = String.format(RETRY_SERVICE_CONFIG, grpcConfig.maxRetryTimes());
       channelBuilder =
           channelBuilder
-              .defaultServiceConfig(new Gson().fromJson(serviceConfig, Map.class))
+              .defaultServiceConfig(buildServiceConfig(grpcConfig))
               .enableRetry()
               .maxRetryAttempts(grpcConfig.maxRetryTimes());
     } else {
@@ -139,6 +117,30 @@ public class GrpcLookupFunction extends AsyncLookupFunction {
     }
     channelBuilder = channelBuilder.maxInboundMessageSize(Integer.MAX_VALUE);
     return channelBuilder.build();
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Map<String, ?> buildServiceConfig(GrpcServiceOptions grpcConfig) {
+    final var serviceConfig =
+        String.format(
+            """
+            {
+              "methodConfig": [
+                {
+                  "name": [ { } ],
+                  "retryPolicy": {
+                    "maxAttempts": %s,
+                    "initialBackoff": "0.5s",
+                    "maxBackoff": "30s",
+                    "backoffMultiplier": 2,
+                    "retryableStatusCodes": %s
+                  }
+                }
+              ]
+            }""",
+            grpcConfig.maxRetryTimes(),
+            GSON.toJson(grpcConfig.retryStatusCodes().stream().map(Code::forNumber).toList()));
+    return GSON.fromJson(serviceConfig, Map.class);
   }
 
   @Override

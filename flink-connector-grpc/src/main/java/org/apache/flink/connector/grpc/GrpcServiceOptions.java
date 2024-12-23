@@ -16,6 +16,7 @@
 package org.apache.flink.connector.grpc;
 
 import java.io.Serializable;
+import java.util.List;
 
 record GrpcServiceOptions(
     String url,
@@ -26,7 +27,9 @@ record GrpcServiceOptions(
      * io.grpc.MethodDescriptor.getFullMethodName()
      */
     String serviceMethodName,
-    int maxRetryTimes)
+    int maxRetryTimes,
+    List<Integer> retryStatusCodes,
+    List<Integer> errorStatusCodes)
     implements Serializable {
 
   // public GrpcServiceOptions(

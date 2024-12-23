@@ -17,11 +17,13 @@ package org.apache.flink.connector.grpc;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.serialization.SerializationSchema;
+import org.apache.flink.connector.grpc.handler.ErrorResponseHandler;
 import org.apache.flink.connector.grpc.handler.GrpcResponseHandler;
 import org.apache.flink.connector.grpc.handler.MetadataResponseHandler;
 import org.apache.flink.connector.grpc.util.Projections;
@@ -106,22 +108,24 @@ class GrpcLookupTableSource
         this.responseFormat.createRuntimeDecoder(
             lookupContext, Projection.of(respProjection).project(this.physicalRowDataType));
 
-    // Create the metadata response handler
-    final var metaHandler = new MetadataResponseHandler(this.metadataFields);
-
-    // Create the response handler to compose the final produced row
-    final GrpcResponseHandler<RowData, RowData, RowData> responseHandler =
+    // Create the physical row response handler
+    final GrpcResponseHandler<RowData, RowData, RowData> physicalResponseHandler =
         (reqRow, respRow, error) -> {
+          // Filter metadata from request row, extracted later
+          final var filteredRequest =
+              ProjectedRowData.from(Projection.range(0, reqProjection.length)).replaceRow(reqRow);
           final var joinedRow =
               new JoinedRowData(
-                  // Filter metadata from request row, extracted later
-                  ProjectedRowData.from(Projection.range(0, reqProjection.length))
-                      .replaceRow(reqRow),
+                  filteredRequest,
                   respRow != null ? respRow : new GenericRowData(respProjection.length));
-          final var physicalRow = ProjectedRowData.from(joinedProjection).replaceRow(joinedRow);
-          final var metadataRow = metaHandler.handle(reqRow, respRow, error);
-          return new JoinedRowData(physicalRow, metadataRow);
+          return ProjectedRowData.from(joinedProjection).replaceRow(joinedRow);
         };
+
+    // Create the response handler to compose the final produced row
+    final var responseHandler =
+        new ErrorResponseHandler<RowData, RowData, RowData>(
+            Set.copyOf(this.grpcConfig.errorStatusCodes()),
+            new MetadataResponseHandler<>(this.metadataFields, physicalResponseHandler));
 
     final var lookupFunc =
         new GrpcLookupFunction(
