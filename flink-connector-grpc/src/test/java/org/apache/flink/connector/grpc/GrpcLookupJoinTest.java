@@ -269,7 +269,8 @@ class GrpcLookupJoinTest {
         'host' = 'localhost',
         'port' = '50051',
         'use-plain-text' = 'true',
-        'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod'
+        'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod',
+        'lookup.max-retries' = '0'
       );""");
 
     final var sql =
@@ -295,7 +296,7 @@ class GrpcLookupJoinTest {
             Row.of(
                 "FAIL_ME",
                 null,
-                3,
+                14,
                 "I WAS TOLD TO FAIL",
                 Map.of(
                     "failure-info", "my-failure-reason",
@@ -321,7 +322,8 @@ class GrpcLookupJoinTest {
         'host' = 'localhost',
         'port' = '50051',
         'use-plain-text' = 'true',
-        'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod'
+        'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod',
+        'lookup.max-retries' = '0'
       );""");
 
     env.executeSql(
@@ -385,7 +387,8 @@ class GrpcLookupJoinTest {
         'host' = 'localhost',
         'port' = '50051',
         'use-plain-text' = 'true',
-        'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod'
+        'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod',
+        'lookup.max-retries' = '0'
       );""");
 
     final var sql =
@@ -425,7 +428,7 @@ class GrpcLookupJoinTest {
         'port' = '50051',
         'use-plain-text' = 'true',
         'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod',
-        'grpc-retry-codes' = '1;3',
+        'grpc-retry-codes' = '1;14',
         'grpc-error-codes' = '16',
         'lookup.max-retries' = '4'
       );""");
@@ -443,7 +446,7 @@ class GrpcLookupJoinTest {
 
     final var successResults = ImmutableList.copyOf(env.executeSql(sql).collect());
 
-    Truth.assertThat(successResults).containsExactly(Row.of("FAIL_ME", 3));
+    Truth.assertThat(successResults).containsExactly(Row.of("FAIL_ME", 14));
     Truth.assertThat(this.grpcRequestCounter.get()).isEqualTo(4);
   }
 
@@ -465,8 +468,8 @@ class GrpcLookupJoinTest {
         'port' = '50051',
         'use-plain-text' = 'true',
         'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod',
-        'grpc-retry-codes' = '1;3',
-        'grpc-error-codes' = '3;4',
+        'grpc-retry-codes' = '1;14',
+        'grpc-error-codes' = '4;14',
         'lookup.max-retries' = '4'
       );""");
 
@@ -485,7 +488,7 @@ class GrpcLookupJoinTest {
         Assertions.assertThrows(Exception.class, () -> env.executeSql(sql).await());
     Truth.assertThat(Throwables.getRootCause(error).toString())
         .isEqualTo(
-            "io.grpc.StatusRuntimeException: io.grpc.StatusRuntimeException: INVALID_ARGUMENT: I WAS TOLD TO FAIL");
+            "io.grpc.StatusRuntimeException: io.grpc.StatusRuntimeException: UNAVAILABLE: I WAS TOLD TO FAIL");
 
     Truth.assertThat(this.grpcRequestCounter.get()).isEqualTo(4);
   }
@@ -613,7 +616,7 @@ class GrpcLookupJoinTest {
             Metadata.Key.of("failure-data-bin", io.grpc.Metadata.BINARY_BYTE_MARSHALLER),
             "my-failure-reason".getBytes());
         responseObserver.onError(
-            Status.INVALID_ARGUMENT
+            Status.UNAVAILABLE
                 .augmentDescription("I WAS TOLD TO FAIL")
                 .asRuntimeException(metadata));
       } else {
