@@ -365,7 +365,8 @@ class GrpcLookupJoinTest {
     final var failedResults = ImmutableList.copyOf(result.execute().collect());
 
     Truth.assertThat(failedResults)
-        .containsExactly(Row.of("FAIL_ME", null, "FAILED"), Row.of("Fred", "Hello Fred", "SUCCESS"));
+        .containsExactly(
+            Row.of("FAIL_ME", null, "FAILED"), Row.of("Fred", "Hello Fred", "SUCCESS"));
     Truth.assertThat(this.grpcRequestCounter.get())
         .isEqualTo(4); // FIXME: This needs de-duplication
   }

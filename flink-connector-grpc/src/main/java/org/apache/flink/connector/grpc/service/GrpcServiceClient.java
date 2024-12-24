@@ -15,8 +15,6 @@
 //
 package org.apache.flink.connector.grpc.service;
 
-import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.google.common.io.ByteStreams;
 import com.google.gson.Gson;
 import com.google.rpc.Code;
@@ -28,13 +26,9 @@ import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.stub.ClientCalls;
 import io.grpc.stub.StreamObserver;
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.ObjectOutputStream;
-import java.io.Serializable;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -50,26 +44,12 @@ public class GrpcServiceClient implements Closeable {
   private static final Gson GSON = new Gson();
   private static final Logger LOG = LogManager.getLogger(GrpcServiceClient.class);
 
-  private static final LoadingCache<CacheKey, GrpcServiceClient> CLIENT_CACHE =
-      Caffeine.newBuilder().maximumSize(100).build(GrpcServiceClient::new);
-
-  // TODO: Add cache for re-using channels
-
-  public static GrpcServiceClient getOrCreate(
-      GrpcServiceOptions config,
-      SerializationSchema<RowData> requestSchema,
-      DeserializationSchema<RowData> responseSchema) {
-    return CLIENT_CACHE.get(new CacheKey(config, requestSchema, responseSchema));
-  }
+  // TODO: Add cache for re-using channels?
 
   private final ManagedChannel channel;
   private final MethodDescriptor<RowData, RowData> grpcMethodDesc;
 
-  private GrpcServiceClient(CacheKey key) {
-    this(key.config(), key.requestSchema(), key.responseSchema());
-  }
-
-  private GrpcServiceClient(
+  GrpcServiceClient(
       GrpcServiceOptions config,
       SerializationSchema<RowData> requestSchema,
       DeserializationSchema<RowData> responseSchema) {
@@ -96,7 +76,6 @@ public class GrpcServiceClient implements Closeable {
   @Override
   public void close() throws IOException {
     try {
-      // FIXME: TODO: Need ref counters for closing!
       if (!this.channel.isShutdown()) {
         this.channel.shutdown();
         this.channel.awaitTermination(10L, TimeUnit.SECONDS);
@@ -202,40 +181,6 @@ public class GrpcServiceClient implements Closeable {
       } else {
         future.completeExceptionally(new Error("Failed to complete properly"));
       }
-    }
-  }
-
-  private record CacheKey(
-      GrpcServiceOptions config,
-      SerializationSchema<RowData> requestSchema,
-      DeserializationSchema<RowData> responseSchema)
-      implements Serializable {
-
-    @Override
-    public boolean equals(Object obj) {
-      if (obj instanceof CacheKey other) {
-        // H4k!? : PbRowDataSerializationSchema does not implement equals. Use serialization to
-        // compare.
-        return Arrays.equals(toBytes(this), toBytes(other));
-      } else {
-        return false;
-      }
-    }
-
-    @Override
-    public int hashCode() {
-      return Arrays.hashCode(toBytes(this));
-    }
-
-    private static byte[] toBytes(Object o) {
-      ByteArrayOutputStream bos = new ByteArrayOutputStream();
-      try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
-        oos.writeObject(o);
-        oos.flush();
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-      return bos.toByteArray();
     }
   }
 }
