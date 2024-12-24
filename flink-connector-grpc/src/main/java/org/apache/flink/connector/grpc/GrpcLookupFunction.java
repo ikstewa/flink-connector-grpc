@@ -25,7 +25,6 @@ import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.serialization.SerializationSchema;
 import org.apache.flink.connector.grpc.handler.GrpcResponseHandler;
 import org.apache.flink.connector.grpc.service.GrpcServiceClient;
-import org.apache.flink.connector.grpc.service.SharedGrpcServiceClient;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.functions.AsyncLookupFunction;
 import org.apache.flink.table.functions.FunctionContext;
@@ -59,8 +58,7 @@ public class GrpcLookupFunction extends AsyncLookupFunction {
     this.responseSchema.open(null);
 
     this.grpcClient =
-        SharedGrpcServiceClient.getOrCreate(
-            this.grpcConfig, this.requestSchema, this.responseSchema);
+        GrpcServiceClient.getOrCreate(this.grpcConfig, this.requestSchema, this.responseSchema);
 
     this.grpcCallCounter = new AtomicInteger(0);
     this.grpcErrorCounter = new AtomicInteger(0);

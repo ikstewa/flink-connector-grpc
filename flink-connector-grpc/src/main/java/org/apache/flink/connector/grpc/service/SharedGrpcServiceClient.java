@@ -20,13 +20,14 @@ import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.Arrays;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.serialization.SerializationSchema;
 import org.apache.flink.connector.grpc.GrpcServiceOptions;
 import org.apache.flink.table.data.RowData;
 
-public class SharedGrpcServiceClient extends GrpcServiceClient {
+class SharedGrpcServiceClient implements GrpcServiceClient {
 
   private static final ConcurrentHashMap<CacheKey, SharedRef> CLIENT_CACHE =
       new ConcurrentHashMap<>();
@@ -50,15 +51,22 @@ public class SharedGrpcServiceClient extends GrpcServiceClient {
   }
 
   private final CacheKey key;
+  private final GrpcServiceClient client;
 
   private SharedGrpcServiceClient(CacheKey key) {
-    super(key.config(), key.requestSchema(), key.responseSchema());
+    this.client =
+        new GrpcServiceClientImpl(key.config(), key.requestSchema(), key.responseSchema());
     this.key = key;
   }
 
   @Override
+  public CompletableFuture<RowData> asyncCall(RowData req) {
+    return this.client.asyncCall(req);
+  }
+
+  @Override
   public void close() throws IOException {
-    final var client =
+    final var clientRef =
         CLIENT_CACHE.compute(
             key,
             (k, v) -> {
@@ -70,8 +78,8 @@ public class SharedGrpcServiceClient extends GrpcServiceClient {
                 return new SharedRef(v.count() - 1, v.client());
               }
             });
-    if (client == null) {
-      super.close();
+    if (clientRef == null) {
+      this.client.close();
     }
   }
 
