@@ -18,7 +18,7 @@ package org.apache.flink.connector.grpc;
 import java.io.Serializable;
 import java.util.List;
 
-record GrpcServiceOptions(
+public record GrpcServiceOptions(
     String url,
     int port,
     boolean usePlainText,
