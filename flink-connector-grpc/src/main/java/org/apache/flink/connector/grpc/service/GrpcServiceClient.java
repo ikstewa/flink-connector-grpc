@@ -15,7 +15,12 @@
 //
 package org.apache.flink.connector.grpc.service;
 
+import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
+import java.io.IOException;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
+import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.serialization.SerializationSchema;
@@ -26,10 +31,50 @@ public interface GrpcServiceClient extends Closeable {
 
   CompletableFuture<RowData> asyncCall(RowData req);
 
-  public static GrpcServiceClient getOrCreate(
+  static final SharedResourceHolder<SharedClientKey, GrpcServiceClient> SHARED_CLIENTS =
+      new SharedResourceHolder<>(
+          key -> new GrpcServiceClientImpl(key.config(), key.requestSchema(), key.responseSchema()),
+          GrpcServiceClient.class);
+
+  public static GrpcServiceClient createSharedClient(
       GrpcServiceOptions config,
       SerializationSchema<RowData> requestSchema,
       DeserializationSchema<RowData> responseSchema) {
-    return SharedGrpcServiceClient.getOrCreate(config, requestSchema, responseSchema);
+    final var key = new SharedClientKey(config, requestSchema, responseSchema);
+    return SHARED_CLIENTS.createSharedResource(key);
+  }
+
+  public record SharedClientKey(
+      GrpcServiceOptions config,
+      SerializationSchema<RowData> requestSchema,
+      DeserializationSchema<RowData> responseSchema)
+      implements Serializable {
+
+    @Override
+    public boolean equals(Object obj) {
+      if (obj instanceof SharedClientKey other) {
+        // H4k!? : PbRowDataSerializationSchema does not implement equals. Use serialization to
+        // compare.
+        return Arrays.equals(toBytes(this), toBytes(other));
+      } else {
+        return false;
+      }
+    }
+
+    @Override
+    public int hashCode() {
+      return Arrays.hashCode(toBytes(this));
+    }
+
+    private static byte[] toBytes(Object o) {
+      ByteArrayOutputStream bos = new ByteArrayOutputStream();
+      try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
+        oos.writeObject(o);
+        oos.flush();
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+      return bos.toByteArray();
+    }
   }
 }
