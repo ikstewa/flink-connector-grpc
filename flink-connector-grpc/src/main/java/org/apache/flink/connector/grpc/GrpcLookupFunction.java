@@ -58,7 +58,8 @@ public class GrpcLookupFunction extends AsyncLookupFunction {
     this.responseSchema.open(null);
 
     this.grpcClient =
-        GrpcServiceClient.getOrCreate(this.grpcConfig, this.requestSchema, this.responseSchema);
+        GrpcServiceClient.createSharedClient(
+            this.grpcConfig, this.requestSchema, this.responseSchema);
 
     this.grpcCallCounter = new AtomicInteger(0);
     this.grpcErrorCounter = new AtomicInteger(0);
