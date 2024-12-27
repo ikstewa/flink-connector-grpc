@@ -355,7 +355,7 @@ class GrpcLookupJoinTest {
             """
         SELECT
           name AS name,
-          message AS message,
+          CAST(NULL AS STRING) AS message,
           'FAILED' AS status
         FROM grpc
         WHERE grpc_status_code <> 0;""");
@@ -365,7 +365,8 @@ class GrpcLookupJoinTest {
     final var failedResults = ImmutableList.copyOf(result.execute().collect());
 
     Truth.assertThat(failedResults)
-        .containsExactly(Row.of("FAIL_ME", "", "FAILED"), Row.of("Fred", "Hello Fred", "SUCCESS"));
+        .containsExactly(
+            Row.of("FAIL_ME", null, "FAILED"), Row.of("Fred", "Hello Fred", "SUCCESS"));
     Truth.assertThat(this.grpcRequestCounter.get())
         .isEqualTo(4); // FIXME: This needs de-duplication
   }
