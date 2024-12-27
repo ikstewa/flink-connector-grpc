@@ -367,8 +367,7 @@ class GrpcLookupJoinTest {
     Truth.assertThat(failedResults)
         .containsExactly(
             Row.of("FAIL_ME", null, "FAILED"), Row.of("Fred", "Hello Fred", "SUCCESS"));
-    Truth.assertThat(this.grpcRequestCounter.get())
-        .isEqualTo(4); // FIXME: This needs de-duplication
+    Truth.assertThat(this.grpcRequestCounter.get()).isEqualTo(2);
   }
 
   @Test
@@ -408,6 +407,55 @@ class GrpcLookupJoinTest {
     final var successResults = ImmutableList.copyOf(env.executeSql(sql).collect());
 
     Truth.assertThat(successResults).containsExactly(Row.of("Fred", "Hello Fred"));
+    Truth.assertThat(this.grpcRequestCounter.get()).isEqualTo(2);
+  }
+
+  @Test
+  @DisplayName("Deduplicates concurrent requests")
+  void testDeduplication() {
+    final EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
+    final TableEnvironment env = TableEnvironment.create(settings);
+
+    env.executeSql(
+        """
+      CREATE TABLE Greeter (
+        message STRING NOT NULL,
+        name STRING NOT NULL
+      ) WITH (
+        'connector' = 'grpc-lookup',
+        'host' = 'localhost',
+        'port' = '50051',
+        'use-plain-text' = 'true',
+        'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod',
+        'lookup.max-retries' = '0'
+      );""");
+
+    final var sql =
+        """
+        SELECT
+          E.name AS name,
+          G.message AS message
+        FROM (
+          SELECT 'Sarah' AS name, PROCTIME() AS proc_time
+          UNION ALL SELECT 'Fred' AS name, PROCTIME() AS proc_time
+          UNION ALL SELECT 'Fred' AS name, PROCTIME() AS proc_time
+          UNION ALL SELECT 'Sarah' AS name, PROCTIME() AS proc_time
+          UNION ALL SELECT 'Fred' AS name, PROCTIME() AS proc_time
+          UNION ALL SELECT 'Sarah' AS name, PROCTIME() AS proc_time
+        ) E
+        JOIN Greeter FOR SYSTEM_TIME AS OF E.proc_time AS G
+          ON E.name = G.name""";
+
+    final var successResults = ImmutableList.copyOf(env.executeSql(sql).collect());
+
+    Truth.assertThat(successResults)
+        .containsExactly(
+            Row.of("Sarah", "Hello Sarah"),
+            Row.of("Fred", "Hello Fred"),
+            Row.of("Fred", "Hello Fred"),
+            Row.of("Sarah", "Hello Sarah"),
+            Row.of("Fred", "Hello Fred"),
+            Row.of("Sarah", "Hello Sarah"));
     Truth.assertThat(this.grpcRequestCounter.get()).isEqualTo(2);
   }
 

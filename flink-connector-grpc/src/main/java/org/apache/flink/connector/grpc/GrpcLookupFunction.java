@@ -15,12 +15,16 @@
 //
 package org.apache.flink.connector.grpc;
 
+import com.google.common.base.Throwables;
 import io.grpc.StatusRuntimeException;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
+import java.util.stream.Stream;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.serialization.SerializationSchema;
 import org.apache.flink.connector.grpc.handler.GrpcResponseHandler;
@@ -34,6 +38,7 @@ public class GrpcLookupFunction extends AsyncLookupFunction {
   private final GrpcServiceOptions grpcConfig;
   private final SerializationSchema<RowData> requestSchema;
   private final DeserializationSchema<RowData> responseSchema;
+  private final Function<RowData, RowData> requestHandler;
   private final GrpcResponseHandler<RowData, RowData, RowData> responseHandler;
 
   private transient GrpcServiceClient grpcClient;
@@ -42,12 +47,14 @@ public class GrpcLookupFunction extends AsyncLookupFunction {
 
   public GrpcLookupFunction(
       GrpcServiceOptions grpcConfig,
+      Function<RowData, RowData> requestHandler,
       GrpcResponseHandler<RowData, RowData, RowData> responseHandler,
       SerializationSchema<RowData> requestSchema,
       DeserializationSchema<RowData> responseSchema) {
     this.grpcConfig = grpcConfig;
     this.requestSchema = requestSchema;
     this.responseSchema = responseSchema;
+    this.requestHandler = requestHandler;
     this.responseHandler = responseHandler;
   }
 
@@ -77,20 +84,37 @@ public class GrpcLookupFunction extends AsyncLookupFunction {
   }
 
   @Override
-  public CompletableFuture<Collection<RowData>> asyncLookup(RowData keyRow) {
+  public CompletableFuture<Collection<RowData>> asyncLookup(RowData req) {
     this.grpcCallCounter.incrementAndGet();
 
-    final var fut = this.grpcClient.asyncCall(keyRow);
-    return fut.handle(
+    // Trim request: Metadata filters can show up in request row
+    final RowData keyRow = this.requestHandler.apply(req);
+
+    final var grpcCall = this.grpcClient.asyncCall(keyRow);
+
+    return grpcCall.handle(
         (r, err) -> {
           if (err != null) {
             this.grpcErrorCounter.incrementAndGet();
           }
-          if (err != null && !(err instanceof StatusRuntimeException)) {
+
+          final var statusErr = findStatusError(err);
+
+          // Propagate any non-status exceptions
+          if (err != null && statusErr.isEmpty()) {
             throw new CompletionException(err);
-          } else {
-            return List.of(this.responseHandler.handle(keyRow, r, (StatusRuntimeException) err));
           }
+
+          return List.of(this.responseHandler.handle(keyRow, r, statusErr.orElse(null)));
         });
+  }
+
+  private static Optional<StatusRuntimeException> findStatusError(Throwable err) {
+    return Stream.ofNullable(err)
+        .map(Throwables::getCausalChain)
+        .flatMap(List::stream)
+        .filter(StatusRuntimeException.class::isInstance)
+        .map(StatusRuntimeException.class::cast)
+        .findFirst();
   }
 }

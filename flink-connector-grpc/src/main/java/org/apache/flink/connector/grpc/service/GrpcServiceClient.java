@@ -33,7 +33,10 @@ public interface GrpcServiceClient extends Closeable {
 
   static final SharedResourceHolder<SharedClientKey, GrpcServiceClient> SHARED_CLIENTS =
       new SharedResourceHolder<>(
-          key -> new GrpcServiceClientImpl(key.config(), key.requestSchema(), key.responseSchema()),
+          key ->
+              new DeduplicatingClient(
+                  new GrpcServiceClientImpl(
+                      key.config(), key.requestSchema(), key.responseSchema())),
           GrpcServiceClient.class);
 
   public static GrpcServiceClient createSharedClient(
