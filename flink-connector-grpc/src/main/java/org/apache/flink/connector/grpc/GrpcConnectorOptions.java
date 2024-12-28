@@ -84,7 +84,7 @@ public final class GrpcConnectorOptions {
           .asList()
           .defaultValues(1, 2, 4, 8, 10, 13, 14)
           .withDescription(
-              "List of GRPC status codes that should be treated as errors, separated by semicolon.");
+              "List of GRPC status codes that should be retried, separated by semicolon.");
   public static final ConfigOption<List<Integer>> GRPC_ERROR_CODES =
       ConfigOptions.key("grpc-error-codes")
           .intType()
