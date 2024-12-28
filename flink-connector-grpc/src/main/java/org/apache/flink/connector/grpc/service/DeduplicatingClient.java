@@ -18,6 +18,7 @@ package org.apache.flink.connector.grpc.service;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Expiry;
+import com.github.benmanes.caffeine.cache.Scheduler;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
@@ -29,6 +30,7 @@ class DeduplicatingClient implements GrpcServiceClient {
   // TODO: Can this be loaded from `table.exec.async-lookup.timeout` or GRPC Deadlines??
   private static final Duration EXPIRE_MAX = Duration.ofMinutes(10);
   private static final Duration EXPIRE_AFTER_COMPLETE = Duration.ofSeconds(5);
+  private static final long MAX_CACHE_SIZE = 500;
 
   private final GrpcServiceClient delegate;
 
@@ -38,6 +40,8 @@ class DeduplicatingClient implements GrpcServiceClient {
     this.delegate = client;
     this.futureCache =
         Caffeine.newBuilder()
+            .maximumSize(MAX_CACHE_SIZE)
+            .scheduler(Scheduler.systemScheduler())
             .expireAfter(new BoundedExpiry<RowData, CompletableFuture<RowData>>(EXPIRE_MAX))
             .weakValues()
             .build();
@@ -54,14 +58,14 @@ class DeduplicatingClient implements GrpcServiceClient {
         req,
         key ->
             this.delegate
-                .asyncCall(req)
+                .asyncCall(key)
                 .whenComplete( // Set the expiration after future is completed
                     (val, err) ->
                         this.futureCache
                             .policy()
                             .expireVariably()
                             .get()
-                            .setExpiresAfter(req, EXPIRE_AFTER_COMPLETE)));
+                            .setExpiresAfter(key, EXPIRE_AFTER_COMPLETE)));
   }
 
   private static class BoundedExpiry<K, V> implements Expiry<K, V> {
