@@ -12,8 +12,6 @@ The primary use case for the gRPC connector is to be used in a [Lookup Join](htt
 * Sink - Add Table Sink support to egress via gRPC
 * Auth - Currently assuming internal private networks
 * Cacheable error codes (configurable)
-* Wrapped request/response types
-* De-duplicate requests
 
 ## Example Usage
 

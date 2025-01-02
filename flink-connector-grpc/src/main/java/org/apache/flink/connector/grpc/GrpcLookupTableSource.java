@@ -15,9 +15,11 @@
 //
 package org.apache.flink.connector.grpc;
 
+import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
@@ -81,6 +83,7 @@ class GrpcLookupTableSource implements LookupTableSource, SupportsReadingMetadat
   }
 
   @Override
+  @SuppressWarnings("unchecked")
   public LookupRuntimeProvider getLookupRuntimeProvider(LookupContext lookupContext) {
     // Create projections from physical data type to request/response types
     final int[][] reqProjection =
@@ -109,13 +112,9 @@ class GrpcLookupTableSource implements LookupTableSource, SupportsReadingMetadat
     // Create the physical row response handler
     final GrpcResponseHandler<RowData, RowData, RowData> physicalResponseHandler =
         (reqRow, respRow, error) -> {
-          // Filter metadata from request row, extracted later
-          final var filteredRequest =
-              ProjectedRowData.from(Projection.range(0, reqProjection.length)).replaceRow(reqRow);
           final var joinedRow =
               new JoinedRowData(
-                  filteredRequest,
-                  respRow != null ? respRow : new GenericRowData(respProjection.length));
+                  reqRow, respRow != null ? respRow : new GenericRowData(respProjection.length));
           return ProjectedRowData.from(joinedProjection).replaceRow(joinedRow);
         };
 
@@ -125,9 +124,28 @@ class GrpcLookupTableSource implements LookupTableSource, SupportsReadingMetadat
             Set.copyOf(this.grpcConfig.errorStatusCodes()),
             new MetadataResponseHandler<>(this.metadataFields, physicalResponseHandler));
 
+    final var requestHandler =
+        (Function<RowData, RowData> & Serializable)
+            req -> {
+              // Trim request: Metadata filters can show up in request row
+              if (req.getArity() == reqProjection.length) {
+                return req;
+              } else {
+                final var target = new GenericRowData(reqProjection.length);
+                for (var i = 0; i < target.getArity(); i++) {
+                  target.setField(i, ((GenericRowData) req).getField(i));
+                }
+                return target;
+              }
+            };
+
     final var lookupFunc =
         new GrpcLookupFunction(
-            this.grpcConfig, responseHandler, requestSchemaEncoder, responseSchemaDecoder);
+            this.grpcConfig,
+            requestHandler,
+            responseHandler,
+            requestSchemaEncoder,
+            responseSchemaDecoder);
 
     if (cache != null) {
       return PartialCachingAsyncLookupProvider.of(lookupFunc, cache);
