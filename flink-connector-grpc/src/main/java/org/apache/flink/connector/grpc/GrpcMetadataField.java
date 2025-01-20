@@ -27,7 +27,8 @@ public enum GrpcMetadataField {
       DataTypes.MAP(DataTypes.STRING().notNull(), DataTypes.STRING().nullable()).notNull()),
   STATUS_TRAILERS_BINARY(
       "status-trailers-bin",
-      DataTypes.MAP(DataTypes.STRING().notNull(), DataTypes.BYTES().nullable()).notNull());
+      DataTypes.MAP(DataTypes.STRING().notNull(), DataTypes.BYTES().nullable()).notNull()),
+  RESPONSE_TIME("response-time", DataTypes.BIGINT().notNull());
 
   final String key;
 

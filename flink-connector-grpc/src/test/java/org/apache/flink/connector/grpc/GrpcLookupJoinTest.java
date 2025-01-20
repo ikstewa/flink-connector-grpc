@@ -460,6 +460,50 @@ class GrpcLookupJoinTest {
   }
 
   @Test
+  @DisplayName("Request time deduplication")
+  void testDeduplication_requestTime() {
+    final EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
+    final TableEnvironment env = TableEnvironment.create(settings);
+
+    env.executeSql(
+        """
+      CREATE TABLE Greeter (
+        message STRING NOT NULL,
+        name STRING NOT NULL,
+        response_time BIGINT NOT NULL METADATA FROM 'response-time'
+      ) WITH (
+        'connector' = 'grpc-lookup',
+        'host' = 'localhost',
+        'port' = '50051',
+        'use-plain-text' = 'true',
+        'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod',
+        'lookup.max-retries' = '0'
+      );""");
+
+    final var sql =
+        """
+        SELECT
+          E.name AS name,
+          G.response_time
+        FROM (
+          SELECT 'Sarah' AS name, PROCTIME() AS proc_time
+          UNION ALL SELECT 'Fred' AS name, PROCTIME() AS proc_time
+          UNION ALL SELECT 'Fred' AS name, PROCTIME() AS proc_time
+          UNION ALL SELECT 'Sarah' AS name, PROCTIME() AS proc_time
+          UNION ALL SELECT 'Fred' AS name, PROCTIME() AS proc_time
+          UNION ALL SELECT 'Sarah' AS name, PROCTIME() AS proc_time
+        ) E
+        JOIN Greeter FOR SYSTEM_TIME AS OF E.proc_time AS G
+          ON E.name = G.name""";
+
+    final var successResults =
+        ImmutableList.copyOf(env.executeSql(sql).collect()).stream().distinct().toList();
+
+    Truth.assertThat(successResults).hasSize(4);
+    Truth.assertThat(this.grpcRequestCounter.get()).isEqualTo(2);
+  }
+
+  @Test
   @DisplayName("Retries non-error status codes")
   void testRetries() {
     final EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
