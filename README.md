@@ -148,6 +148,7 @@ The following metadata fields are available:
 | `status-description` | STRING | The GRPC response status description. Includes only non-OK responses. |
 | `status-trailers` | MAP<STRING NOT NULL, STRING> NOT NULL | The GRPC response trailers for non-OK responses. Includes only string value fields. |
 | `status-trailers-bin` | MAP<STRING NOT NULL, VARBINARY> NOT NULL | The GRPC response trailers for non-OK responses. Includes only binary value fields. |
+| `response-time` | BIGINT NOT NULL | The current system time of when the response was processed. Note: May not be the same value for deduplicated requests. The value is the same for cached responses. |
 
 ```roomsql
 CREATE TABLE Greeter (

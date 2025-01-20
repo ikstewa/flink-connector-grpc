@@ -56,6 +56,7 @@ public record MetadataResponseHandler<ReqT, RespT>(
                 Optional.ofNullable(error)
                     .map(e -> toBinaryMapData(e.getTrailers()))
                     .orElse(EMPTY_MAP);
+            case RESPONSE_TIME -> System.currentTimeMillis();
           };
       metadataRow.setField(i, metaVal);
     }
