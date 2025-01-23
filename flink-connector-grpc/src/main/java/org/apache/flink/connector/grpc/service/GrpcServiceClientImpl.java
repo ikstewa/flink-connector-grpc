@@ -66,6 +66,7 @@ class GrpcServiceClientImpl implements GrpcServiceClient {
   }
 
   public CompletableFuture<RowData> asyncCall(RowData req) {
+    LOG.debug("Sending async GRPC request with row: {}", req);
     final var fut = new CompletableFuture<RowData>();
     ClientCalls.asyncUnaryCall(
         channel.newCall(this.grpcMethodDesc, CallOptions.DEFAULT), req, new UnaryHandler<>(fut));
@@ -87,9 +88,11 @@ class GrpcServiceClientImpl implements GrpcServiceClient {
   private static ManagedChannel buildChannel(GrpcServiceOptions grpcConfig) {
     var channelBuilder = ManagedChannelBuilder.forAddress(grpcConfig.url(), grpcConfig.port());
     if (grpcConfig.maxRetryTimes() > 0) {
+      final var serviceConfig = buildServiceConfig(grpcConfig);
+      LOG.info("Using GRPC ServiceConfig: {}", serviceConfig);
       channelBuilder =
           channelBuilder
-              .defaultServiceConfig(buildServiceConfig(grpcConfig))
+              .defaultServiceConfig(serviceConfig)
               .enableRetry()
               .maxRetryAttempts(grpcConfig.maxRetryTimes());
     } else {
@@ -165,11 +168,13 @@ class GrpcServiceClientImpl implements GrpcServiceClient {
 
     @Override
     public void onNext(T value) {
+      LOG.debug("Received GRPC response: {}", value);
       result = value;
     }
 
     @Override
     public void onError(Throwable t) {
+      LOG.debug("Received GRPC error response: {}", t);
       future.completeExceptionally(t);
     }
 
