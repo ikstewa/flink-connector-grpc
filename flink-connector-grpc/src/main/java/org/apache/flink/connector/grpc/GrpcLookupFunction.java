@@ -107,6 +107,7 @@ public class GrpcLookupFunction extends AsyncLookupFunction {
 
           // Propagate any non-status exceptions
           if (err != null && statusErr.isEmpty()) {
+            LOG.error("Found unexpected result error", err);
             throw new CompletionException(err);
           }
 
