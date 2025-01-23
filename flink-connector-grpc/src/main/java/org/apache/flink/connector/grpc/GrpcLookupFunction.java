@@ -32,8 +32,12 @@ import org.apache.flink.connector.grpc.service.GrpcServiceClient;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.functions.AsyncLookupFunction;
 import org.apache.flink.table.functions.FunctionContext;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class GrpcLookupFunction extends AsyncLookupFunction {
+
+  private static final Logger LOG = LogManager.getLogger(GrpcServiceClient.class);
 
   private final GrpcServiceOptions grpcConfig;
   private final SerializationSchema<RowData> requestSchema;
@@ -85,6 +89,7 @@ public class GrpcLookupFunction extends AsyncLookupFunction {
 
   @Override
   public CompletableFuture<Collection<RowData>> asyncLookup(RowData req) {
+    LOG.debug("Received async lookup request for row: {}", req);
     this.grpcCallCounter.incrementAndGet();
 
     // Trim request: Metadata filters can show up in request row
@@ -105,7 +110,10 @@ public class GrpcLookupFunction extends AsyncLookupFunction {
             throw new CompletionException(err);
           }
 
-          return List.of(this.responseHandler.handle(keyRow, r, statusErr.orElse(null)));
+          LOG.debug("Handling response: request[{}] response[{}] error[{}]", keyRow, r, statusErr);
+          final var result = this.responseHandler.handle(keyRow, r, statusErr.orElse(null));
+          LOG.debug("Returning response row: {}", result);
+          return List.of(result);
         });
   }
 

@@ -66,6 +66,7 @@ class GrpcServiceClientImpl implements GrpcServiceClient {
   }
 
   public CompletableFuture<RowData> asyncCall(RowData req) {
+    LOG.debug("Sending async GRPC request with row: {}", req);
     final var fut = new CompletableFuture<RowData>();
     ClientCalls.asyncUnaryCall(
         channel.newCall(this.grpcMethodDesc, CallOptions.DEFAULT), req, new UnaryHandler<>(fut));
@@ -165,11 +166,13 @@ class GrpcServiceClientImpl implements GrpcServiceClient {
 
     @Override
     public void onNext(T value) {
+      LOG.debug("Received GRPC response: {}", value);
       result = value;
     }
 
     @Override
     public void onError(Throwable t) {
+      LOG.debug("Received GRPC error response: {}", t);
       future.completeExceptionally(t);
     }
 
