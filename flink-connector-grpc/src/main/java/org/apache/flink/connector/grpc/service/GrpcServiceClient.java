@@ -39,12 +39,16 @@ public interface GrpcServiceClient extends Closeable {
                       key.config(), key.requestSchema(), key.responseSchema())),
           GrpcServiceClient.class);
 
-  public static GrpcServiceClient createSharedClient(
+  public static GrpcServiceClient createClient(
       GrpcServiceOptions config,
       SerializationSchema<RowData> requestSchema,
       DeserializationSchema<RowData> responseSchema) {
-    final var key = new SharedClientKey(config, requestSchema, responseSchema);
-    return SHARED_CLIENTS.createSharedResource(key);
+    if (config.deduplicateRequests()) {
+      final var key = new SharedClientKey(config, requestSchema, responseSchema);
+      return SHARED_CLIENTS.createSharedResource(key);
+    } else {
+      return new GrpcServiceClientImpl(config, requestSchema, responseSchema);
+    }
   }
 
   public record SharedClientKey(

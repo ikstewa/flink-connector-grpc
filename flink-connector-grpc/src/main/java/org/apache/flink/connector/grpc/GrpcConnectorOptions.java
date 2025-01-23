@@ -92,6 +92,12 @@ public final class GrpcConnectorOptions {
           .defaultValues(3, 6, 7, 9, 11, 12, 15, 16)
           .withDescription(
               "List of GRPC status codes that should be treated as errors, separated by semicolon.");
+  public static final ConfigOption<Boolean> GRPC_DEDUPLICATE_REQUESTS =
+      ConfigOptions.key("grpc-deduplicate-requests")
+          .booleanType()
+          .defaultValue(true)
+          .withDescription(
+              "Concurrent requests for the same lookup key are deduplicated and only a single request is set to origin.");
 
   // --------------------------------------------------------------------------------------------
   // Format options
