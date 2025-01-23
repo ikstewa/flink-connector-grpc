@@ -88,9 +88,11 @@ class GrpcServiceClientImpl implements GrpcServiceClient {
   private static ManagedChannel buildChannel(GrpcServiceOptions grpcConfig) {
     var channelBuilder = ManagedChannelBuilder.forAddress(grpcConfig.url(), grpcConfig.port());
     if (grpcConfig.maxRetryTimes() > 0) {
+      final var serviceConfig = buildServiceConfig(grpcConfig);
+      LOG.info("Using GRPC ServiceConfig: {}", serviceConfig);
       channelBuilder =
           channelBuilder
-              .defaultServiceConfig(buildServiceConfig(grpcConfig))
+              .defaultServiceConfig(serviceConfig)
               .enableRetry()
               .maxRetryAttempts(grpcConfig.maxRetryTimes());
     } else {
