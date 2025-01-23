@@ -29,7 +29,8 @@ public record GrpcServiceOptions(
     String serviceMethodName,
     int maxRetryTimes,
     List<Integer> retryStatusCodes,
-    List<Integer> errorStatusCodes)
+    List<Integer> errorStatusCodes,
+    boolean deduplicateRequests)
     implements Serializable {
 
   // public GrpcServiceOptions(
