@@ -97,7 +97,8 @@ public class GrpcLookupTableSourceFactory implements DynamicTableSourceFactory {
         context.getPhysicalRowDataType(),
         desc.requestEncoder(),
         desc.responseDecoder(),
-        getLookupCache(tableOptions));
+        getLookupCache(tableOptions),
+        tableOptions.get(GrpcConnectorOptions.ASYNC));
   }
 
   protected void validateSourceOptions(ReadableConfig tableOptions)
