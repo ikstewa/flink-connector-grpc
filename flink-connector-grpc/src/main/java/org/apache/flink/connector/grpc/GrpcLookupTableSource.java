@@ -36,7 +36,9 @@ import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.connector.source.LookupTableSource;
 import org.apache.flink.table.connector.source.abilities.SupportsReadingMetadata;
 import org.apache.flink.table.connector.source.lookup.AsyncLookupFunctionProvider;
+import org.apache.flink.table.connector.source.lookup.LookupFunctionProvider;
 import org.apache.flink.table.connector.source.lookup.PartialCachingAsyncLookupProvider;
+import org.apache.flink.table.connector.source.lookup.PartialCachingLookupProvider;
 import org.apache.flink.table.connector.source.lookup.cache.LookupCache;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
@@ -52,19 +54,22 @@ class GrpcLookupTableSource implements LookupTableSource, SupportsReadingMetadat
   @Nullable private final LookupCache cache;
   private DataType physicalRowDataType;
   private List<GrpcMetadataField> metadataFields;
+  private final boolean async;
 
   GrpcLookupTableSource(
       GrpcServiceOptions grpcConfig,
       DataType physicalRowDataType,
       EncodingFormat<SerializationSchema<RowData>> requestFormat,
       DecodingFormat<DeserializationSchema<RowData>> responseFormat,
-      @Nullable LookupCache cache) {
+      @Nullable LookupCache cache,
+      boolean async) {
     this.grpcConfig = grpcConfig;
     this.physicalRowDataType = physicalRowDataType;
     this.metadataFields = List.of();
     this.requestFormat = requestFormat;
     this.responseFormat = responseFormat;
     this.cache = cache;
+    this.async = async;
   }
 
   @Override
@@ -74,7 +79,8 @@ class GrpcLookupTableSource implements LookupTableSource, SupportsReadingMetadat
         this.physicalRowDataType,
         this.requestFormat,
         this.responseFormat,
-        this.cache);
+        this.cache,
+        this.async);
   }
 
   @Override
@@ -139,18 +145,27 @@ class GrpcLookupTableSource implements LookupTableSource, SupportsReadingMetadat
               }
             };
 
-    final var lookupFunc =
-        new GrpcLookupFunction(
+    final var asyncLookupFunc =
+        new AsyncGrpcLookupFunction(
             this.grpcConfig,
             requestHandler,
             responseHandler,
             requestSchemaEncoder,
             responseSchemaDecoder);
 
-    if (cache != null) {
-      return PartialCachingAsyncLookupProvider.of(lookupFunc, cache);
+    if (async) {
+      if (cache != null) {
+        return PartialCachingAsyncLookupProvider.of(asyncLookupFunc, cache);
+      } else {
+        return AsyncLookupFunctionProvider.of(asyncLookupFunc);
+      }
     } else {
-      return AsyncLookupFunctionProvider.of(lookupFunc);
+      final var lookupFunc = new GrpcLookupFunction(asyncLookupFunc);
+      if (cache != null) {
+        return PartialCachingLookupProvider.of(lookupFunc, cache);
+      } else {
+        return LookupFunctionProvider.of(lookupFunc);
+      }
     }
   }
 
