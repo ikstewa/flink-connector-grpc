@@ -58,6 +58,7 @@ public class GrpcLookupTableSourceFactory implements DynamicTableSourceFactory {
         GrpcConnectorOptions.GRPC_RETRY_CODES,
         GrpcConnectorOptions.GRPC_ERROR_CODES,
         GrpcConnectorOptions.GRPC_DEDUPLICATE_REQUESTS,
+        GrpcConnectorOptions.ASYNC,
         LookupOptions.CACHE_TYPE,
         LookupOptions.PARTIAL_CACHE_EXPIRE_AFTER_ACCESS,
         LookupOptions.PARTIAL_CACHE_EXPIRE_AFTER_WRITE,
@@ -96,7 +97,8 @@ public class GrpcLookupTableSourceFactory implements DynamicTableSourceFactory {
         context.getPhysicalRowDataType(),
         desc.requestEncoder(),
         desc.responseDecoder(),
-        getLookupCache(tableOptions));
+        getLookupCache(tableOptions),
+        tableOptions.get(GrpcConnectorOptions.ASYNC));
   }
 
   protected void validateSourceOptions(ReadableConfig tableOptions)

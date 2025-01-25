@@ -15,114 +15,38 @@
 //
 package org.apache.flink.connector.grpc;
 
-import com.google.common.base.Throwables;
-import io.grpc.StatusRuntimeException;
+import java.io.IOException;
 import java.util.Collection;
-import java.util.List;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
-import java.util.stream.Stream;
-import org.apache.flink.api.common.serialization.DeserializationSchema;
-import org.apache.flink.api.common.serialization.SerializationSchema;
-import org.apache.flink.connector.grpc.handler.GrpcResponseHandler;
-import org.apache.flink.connector.grpc.service.GrpcServiceClient;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.functions.AsyncLookupFunction;
 import org.apache.flink.table.functions.FunctionContext;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.apache.flink.table.functions.LookupFunction;
+import org.apache.flink.util.FlinkRuntimeException;
 
-public class GrpcLookupFunction extends AsyncLookupFunction {
+public class GrpcLookupFunction extends LookupFunction {
 
-  private static final Logger LOG = LogManager.getLogger(GrpcServiceClient.class);
+  private final AsyncGrpcLookupFunction delegate;
 
-  private final GrpcServiceOptions grpcConfig;
-  private final SerializationSchema<RowData> requestSchema;
-  private final DeserializationSchema<RowData> responseSchema;
-  private final Function<RowData, RowData> requestHandler;
-  private final GrpcResponseHandler<RowData, RowData, RowData> responseHandler;
-
-  private transient GrpcServiceClient grpcClient;
-  private transient AtomicInteger grpcCallCounter;
-  private transient AtomicInteger grpcErrorCounter;
-
-  public GrpcLookupFunction(
-      GrpcServiceOptions grpcConfig,
-      Function<RowData, RowData> requestHandler,
-      GrpcResponseHandler<RowData, RowData, RowData> responseHandler,
-      SerializationSchema<RowData> requestSchema,
-      DeserializationSchema<RowData> responseSchema) {
-    this.grpcConfig = grpcConfig;
-    this.requestSchema = requestSchema;
-    this.responseSchema = responseSchema;
-    this.requestHandler = requestHandler;
-    this.responseHandler = responseHandler;
+  public GrpcLookupFunction(AsyncGrpcLookupFunction delegate) {
+    this.delegate = delegate;
   }
 
   @Override
   public void open(FunctionContext context) throws Exception {
     super.open(context);
-    this.requestSchema.open(null);
-    this.responseSchema.open(null);
-
-    this.grpcClient =
-        GrpcServiceClient.createClient(this.grpcConfig, this.requestSchema, this.responseSchema);
-
-    this.grpcCallCounter = new AtomicInteger(0);
-    this.grpcErrorCounter = new AtomicInteger(0);
-    context
-        .getMetricGroup()
-        .gauge("grpc-table-lookup-call-counter", () -> grpcCallCounter.intValue());
-    context
-        .getMetricGroup()
-        .gauge("grpc-table-lookup-call-error", () -> grpcErrorCounter.intValue());
+    this.delegate.open(context);
   }
 
   @Override
   public void close() throws Exception {
-    this.grpcClient.close();
+    this.delegate.close();
   }
 
   @Override
-  public CompletableFuture<Collection<RowData>> asyncLookup(RowData req) {
-    LOG.debug("Received async lookup request for row: {}", req);
-    this.grpcCallCounter.incrementAndGet();
-
-    // Trim request: Metadata filters can show up in request row
-    final RowData keyRow = this.requestHandler.apply(req);
-
-    final var grpcCall = this.grpcClient.asyncCall(keyRow);
-
-    return grpcCall.handle(
-        (r, err) -> {
-          if (err != null) {
-            this.grpcErrorCounter.incrementAndGet();
-          }
-
-          final var statusErr = findStatusError(err);
-
-          // Propagate any non-status exceptions
-          if (err != null && statusErr.isEmpty()) {
-            LOG.error("Found unexpected result error", err);
-            throw new CompletionException(err);
-          }
-
-          LOG.debug("Handling response: request[{}] response[{}] error[{}]", keyRow, r, statusErr);
-          final var result = this.responseHandler.handle(keyRow, r, statusErr.orElse(null));
-          LOG.debug("Returning response row: {}", result);
-          return List.of(result);
-        });
-  }
-
-  private static Optional<StatusRuntimeException> findStatusError(Throwable err) {
-    return Stream.ofNullable(err)
-        .map(Throwables::getCausalChain)
-        .flatMap(List::stream)
-        .filter(StatusRuntimeException.class::isInstance)
-        .map(StatusRuntimeException.class::cast)
-        .findFirst();
+  public Collection<RowData> lookup(RowData keyRow) throws IOException {
+    try {
+      return this.delegate.asyncLookup(keyRow).get();
+    } catch (Exception e) {
+      throw new FlinkRuntimeException("Error during lookup", e);
+    }
   }
 }

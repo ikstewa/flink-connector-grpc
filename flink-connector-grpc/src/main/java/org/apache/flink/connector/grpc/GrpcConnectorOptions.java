@@ -98,6 +98,11 @@ public final class GrpcConnectorOptions {
           .defaultValue(true)
           .withDescription(
               "Concurrent requests for the same lookup key are deduplicated and only a single request is set to origin.");
+  public static final ConfigOption<Boolean> ASYNC =
+      ConfigOptions.key("async")
+          .booleanType()
+          .defaultValue(true)
+          .withDescription("Whether to use an async lookup join function");
 
   // --------------------------------------------------------------------------------------------
   // Format options
