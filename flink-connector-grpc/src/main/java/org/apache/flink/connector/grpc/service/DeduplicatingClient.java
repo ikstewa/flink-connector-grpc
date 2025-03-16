@@ -19,9 +19,12 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Expiry;
 import com.github.benmanes.caffeine.cache.Scheduler;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.MoreExecutors;
 import java.io.IOException;
 import java.time.Duration;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import javax.annotation.Nullable;
 import org.apache.flink.table.data.RowData;
 import org.checkerframework.checker.index.qual.NonNegative;
 
@@ -34,7 +37,7 @@ class DeduplicatingClient implements GrpcServiceClient {
 
   private final GrpcServiceClient delegate;
 
-  private final Cache<RowData, CompletableFuture<RowData>> futureCache;
+  private final Cache<RowData, ListenableFuture<RowData>> futureCache;
 
   public DeduplicatingClient(GrpcServiceClient client) {
     this.delegate = client;
@@ -42,7 +45,7 @@ class DeduplicatingClient implements GrpcServiceClient {
         Caffeine.newBuilder()
             .maximumSize(MAX_CACHE_SIZE)
             .scheduler(Scheduler.systemScheduler())
-            .expireAfter(new BoundedExpiry<RowData, CompletableFuture<RowData>>(EXPIRE_MAX))
+            .expireAfter(new BoundedExpiry<RowData, ListenableFuture<RowData>>(EXPIRE_MAX))
             .weakValues()
             .build();
   }
@@ -53,19 +56,21 @@ class DeduplicatingClient implements GrpcServiceClient {
   }
 
   @Override
-  public CompletableFuture<RowData> asyncCall(RowData req) {
+  public ListenableFuture<RowData> asyncCall(RowData req, @Nullable Executor executor) {
     return this.futureCache.get(
         req,
-        key ->
-            this.delegate
-                .asyncCall(key)
-                .whenComplete( // Set the expiration after future is completed
-                    (val, err) ->
-                        this.futureCache
-                            .policy()
-                            .expireVariably()
-                            .get()
-                            .setExpiresAfter(key, EXPIRE_AFTER_COMPLETE)));
+        key -> {
+          final var fut = this.delegate.asyncCall(key, executor);
+          fut.addListener(
+              () ->
+                  this.futureCache
+                      .policy()
+                      .expireVariably()
+                      .get()
+                      .setExpiresAfter(key, EXPIRE_AFTER_COMPLETE),
+              MoreExecutors.directExecutor());
+          return fut;
+        });
   }
 
   private static class BoundedExpiry<K, V> implements Expiry<K, V> {

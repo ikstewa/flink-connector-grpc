@@ -145,22 +145,27 @@ class GrpcLookupTableSource implements LookupTableSource, SupportsReadingMetadat
               }
             };
 
-    final var asyncLookupFunc =
-        new AsyncGrpcLookupFunction(
-            this.grpcConfig,
-            requestHandler,
-            responseHandler,
-            requestSchemaEncoder,
-            responseSchemaDecoder);
-
     if (async) {
+      final var asyncLookupFunc =
+          new AsyncGrpcLookupFunction(
+              this.grpcConfig,
+              requestHandler,
+              responseHandler,
+              requestSchemaEncoder,
+              responseSchemaDecoder);
       if (cache != null) {
         return PartialCachingAsyncLookupProvider.of(asyncLookupFunc, cache);
       } else {
         return AsyncLookupFunctionProvider.of(asyncLookupFunc);
       }
     } else {
-      final var lookupFunc = new GrpcLookupFunction(asyncLookupFunc);
+      final var lookupFunc =
+          new GrpcLookupFunction(
+              this.grpcConfig,
+              requestHandler,
+              responseHandler,
+              requestSchemaEncoder,
+              responseSchemaDecoder);
       if (cache != null) {
         return PartialCachingLookupProvider.of(lookupFunc, cache);
       } else {

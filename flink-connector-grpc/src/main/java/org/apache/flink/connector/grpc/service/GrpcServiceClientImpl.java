@@ -16,6 +16,7 @@
 package org.apache.flink.connector.grpc.service;
 
 import com.google.common.io.ByteStreams;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.gson.Gson;
 import com.google.rpc.Code;
 import io.grpc.CallOptions;
@@ -24,13 +25,13 @@ import io.grpc.ManagedChannelBuilder;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.stub.ClientCalls;
-import io.grpc.stub.StreamObserver;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import javax.annotation.Nullable;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.serialization.SerializationSchema;
 import org.apache.flink.connector.grpc.GrpcServiceOptions;
@@ -42,8 +43,6 @@ class GrpcServiceClientImpl implements GrpcServiceClient {
 
   private static final Gson GSON = new Gson();
   private static final Logger LOG = LogManager.getLogger(GrpcServiceClient.class);
-
-  // TODO: Add cache for re-using channels?
 
   private final ManagedChannel channel;
   private final MethodDescriptor<RowData, RowData> grpcMethodDesc;
@@ -65,12 +64,13 @@ class GrpcServiceClientImpl implements GrpcServiceClient {
             .build();
   }
 
-  public CompletableFuture<RowData> asyncCall(RowData req) {
+  public ListenableFuture<RowData> asyncCall(RowData req, @Nullable Executor executor) {
     LOG.debug("Sending async GRPC request with row: {}", req);
-    final var fut = new CompletableFuture<RowData>();
-    ClientCalls.asyncUnaryCall(
-        channel.newCall(this.grpcMethodDesc, CallOptions.DEFAULT), req, new UnaryHandler<>(fut));
-    return fut;
+    var callOptions = CallOptions.DEFAULT;
+    if (executor != null) {
+      callOptions = callOptions.withExecutor(executor);
+    }
+    return ClientCalls.futureUnaryCall(channel.newCall(this.grpcMethodDesc, callOptions), req);
   }
 
   @Override
@@ -103,6 +103,8 @@ class GrpcServiceClientImpl implements GrpcServiceClient {
       channelBuilder = channelBuilder.usePlaintext();
     }
     channelBuilder = channelBuilder.maxInboundMessageSize(Integer.MAX_VALUE);
+    // Use a direct executor by default. Set the executor on the client call options to override
+    channelBuilder = channelBuilder.directExecutor();
     return channelBuilder.build();
   }
 
@@ -154,37 +156,6 @@ class GrpcServiceClientImpl implements GrpcServiceClient {
     @Override
     public InputStream stream(RowData row) {
       return new ByteArrayInputStream(this.serializer.serialize(row));
-    }
-  }
-
-  /** StreamObserver for GRPC to convert to a CompletableFuture. */
-  private static class UnaryHandler<T> implements StreamObserver<T> {
-    private T result;
-    private final CompletableFuture<T> future;
-
-    public UnaryHandler(CompletableFuture<T> f) {
-      this.future = f;
-    }
-
-    @Override
-    public void onNext(T value) {
-      LOG.debug("Received GRPC response: {}", value);
-      result = value;
-    }
-
-    @Override
-    public void onError(Throwable t) {
-      LOG.debug("Received GRPC error response: {}", t);
-      future.completeExceptionally(t);
-    }
-
-    @Override
-    public void onCompleted() {
-      if (result != null) {
-        future.complete(result);
-      } else {
-        future.completeExceptionally(new Error("Failed to complete properly"));
-      }
     }
   }
 }

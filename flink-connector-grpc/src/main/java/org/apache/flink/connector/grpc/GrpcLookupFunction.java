@@ -17,6 +17,10 @@ package org.apache.flink.connector.grpc;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.function.Function;
+import org.apache.flink.api.common.serialization.DeserializationSchema;
+import org.apache.flink.api.common.serialization.SerializationSchema;
+import org.apache.flink.connector.grpc.handler.GrpcResponseHandler;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.functions.FunctionContext;
 import org.apache.flink.table.functions.LookupFunction;
@@ -26,7 +30,18 @@ public class GrpcLookupFunction extends LookupFunction {
 
   private final AsyncGrpcLookupFunction delegate;
 
-  public GrpcLookupFunction(AsyncGrpcLookupFunction delegate) {
+  public GrpcLookupFunction(
+      GrpcServiceOptions grpcConfig,
+      Function<RowData, RowData> requestHandler,
+      GrpcResponseHandler<RowData, RowData, RowData> responseHandler,
+      SerializationSchema<RowData> requestSchema,
+      DeserializationSchema<RowData> responseSchema) {
+    this(
+        new AsyncGrpcLookupFunction(
+            grpcConfig, requestHandler, responseHandler, requestSchema, responseSchema, true));
+  }
+
+  private GrpcLookupFunction(AsyncGrpcLookupFunction delegate) {
     this.delegate = delegate;
   }
 
