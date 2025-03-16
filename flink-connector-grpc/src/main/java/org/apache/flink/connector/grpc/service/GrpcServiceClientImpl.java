@@ -46,6 +46,7 @@ class GrpcServiceClientImpl implements GrpcServiceClient {
 
   private final ManagedChannel channel;
   private final MethodDescriptor<RowData, RowData> grpcMethodDesc;
+  private final long deadlineMs;
 
   GrpcServiceClientImpl(
       GrpcServiceOptions config,
@@ -62,6 +63,7 @@ class GrpcServiceClientImpl implements GrpcServiceClient {
             .setRequestMarshaller(marshaller)
             .setResponseMarshaller(marshaller)
             .build();
+    this.deadlineMs = config.requestDeadlineMs();
   }
 
   public ListenableFuture<RowData> asyncCall(RowData req, @Nullable Executor executor) {
@@ -69,6 +71,9 @@ class GrpcServiceClientImpl implements GrpcServiceClient {
     var callOptions = CallOptions.DEFAULT;
     if (executor != null) {
       callOptions = callOptions.withExecutor(executor);
+    }
+    if (this.deadlineMs > 0) {
+      callOptions = callOptions.withDeadlineAfter(this.deadlineMs, TimeUnit.MILLISECONDS);
     }
     return ClientCalls.futureUnaryCall(channel.newCall(this.grpcMethodDesc, callOptions), req);
   }

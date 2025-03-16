@@ -98,6 +98,12 @@ public final class GrpcConnectorOptions {
           .defaultValue(true)
           .withDescription(
               "Concurrent requests for the same lookup key are deduplicated and only a single request is set to origin.");
+  public static final ConfigOption<Long> GRPC_REQUEST_TIMEOUT =
+      ConfigOptions.key("grpc-request-timeout-ms")
+          .longType()
+          .defaultValue(-1L)
+          .withDescription(
+              "Optional duration in ms to apply a deadline for the GRPC request. If values is < 0 no deadline is applied.");
   public static final ConfigOption<Boolean> ASYNC =
       ConfigOptions.key("async")
           .booleanType()
