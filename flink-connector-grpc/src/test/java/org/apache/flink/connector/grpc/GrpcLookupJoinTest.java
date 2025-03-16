@@ -36,7 +36,6 @@ import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.test.util.MiniClusterWithClientResource;
 import org.apache.flink.types.Row;
-import org.apache.flink.util.SerializedThrowable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
@@ -587,12 +586,42 @@ class GrpcLookupJoinTest {
     Truth.assertThat(this.grpcRequestCounter.get()).isEqualTo(4);
   }
 
-  private Throwable getRootCause(Throwable err) {
-    final var root = Throwables.getRootCause(err);
-    if (err instanceof org.apache.flink.util.SerializedThrowable) {
-      return getRootCause(SerializedThrowable.get(err, ClassLoader.getSystemClassLoader()));
-    }
-    return root;
+  @Test
+  @DisplayName("Fails on request timeout")
+  void testDeadline() {
+    final EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
+    final TableEnvironment env = TableEnvironment.create(settings);
+
+    env.executeSql(
+        """
+      CREATE TABLE Greeter (
+        grpc_status_code INT METADATA FROM 'status-code',
+        message STRING NOT NULL,
+        name STRING NOT NULL
+      ) WITH (
+        'connector' = 'grpc-lookup',
+        'host' = 'localhost',
+        'port' = '50051',
+        'use-plain-text' = 'true',
+        'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod',
+        'grpc-request-timeout-ms' = '500'
+      );""");
+
+    final var sql =
+        """
+        SELECT
+          E.name,
+          G.grpc_status_code
+        FROM (
+          SELECT 'TIMEOUT' AS name, PROCTIME() AS proc_time
+        ) E
+        JOIN Greeter FOR SYSTEM_TIME AS OF E.proc_time AS G
+          ON E.name = G.name""";
+
+    final var successResults = ImmutableList.copyOf(env.executeSql(sql).collect());
+
+    Truth.assertThat(successResults).containsExactly(Row.of("TIMEOUT", 4));
+    Truth.assertThat(this.grpcRequestCounter.get()).isEqualTo(1);
   }
 
   @Test
@@ -713,6 +742,12 @@ class GrpcLookupJoinTest {
             Status.UNAVAILABLE
                 .augmentDescription("I WAS TOLD TO FAIL")
                 .asRuntimeException(metadata));
+      } else if (req.getName().equals("TIMEOUT")) {
+        try {
+          Thread.sleep(5_000);
+        } catch (InterruptedException e) {
+          throw new RuntimeException(e);
+        }
       } else {
         HelloReply reply = HelloReply.newBuilder().setMessage("Hello " + req.getName()).build();
         responseObserver.onNext(reply);
