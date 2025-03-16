@@ -15,13 +15,15 @@
 //
 package org.apache.flink.connector.grpc.service;
 
+import com.google.common.util.concurrent.ListenableFuture;
 import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.Arrays;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import javax.annotation.Nullable;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.serialization.SerializationSchema;
 import org.apache.flink.connector.grpc.GrpcServiceOptions;
@@ -29,7 +31,7 @@ import org.apache.flink.table.data.RowData;
 
 public interface GrpcServiceClient extends Closeable {
 
-  CompletableFuture<RowData> asyncCall(RowData req);
+  ListenableFuture<RowData> asyncCall(RowData req, @Nullable Executor executor);
 
   static final SharedResourceHolder<SharedClientKey, GrpcServiceClient> SHARED_CLIENTS =
       new SharedResourceHolder<>(
