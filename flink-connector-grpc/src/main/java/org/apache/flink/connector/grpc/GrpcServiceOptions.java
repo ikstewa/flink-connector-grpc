@@ -28,6 +28,7 @@ public record GrpcServiceOptions(
      */
     String serviceMethodName,
     int maxRetryTimes,
+    long requestDeadlineMs,
     List<Integer> retryStatusCodes,
     List<Integer> errorStatusCodes,
     boolean deduplicateRequests)
