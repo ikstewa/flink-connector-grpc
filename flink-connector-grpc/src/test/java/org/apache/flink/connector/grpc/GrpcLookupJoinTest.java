@@ -504,6 +504,83 @@ class GrpcLookupJoinTest {
   }
 
   @Test
+  @DisplayName("Can deduplicate status codes")
+  void testDeduplication_statusCodes() {
+    final EnvironmentSettings settings = EnvironmentSettings.newInstance().build();
+    final TableEnvironment env = TableEnvironment.create(settings);
+
+    env.executeSql(
+        """
+          CREATE TABLE Greeter (
+            message STRING NOT NULL,
+            name STRING NOT NULL,
+            grpc_status_code INT METADATA FROM 'status-code'
+          ) WITH (
+            'connector' = 'grpc-lookup',
+            'host' = 'localhost',
+            'port' = '50051',
+            'use-plain-text' = 'true',
+            'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod',
+            'lookup.max-retries' = '0'
+          );""");
+
+    final var sourceTable =
+        env.sqlQuery(
+            """
+              SELECT 'Sarah' AS name, PROCTIME() AS proc_time
+              UNION ALL SELECT 'Fred' AS name, PROCTIME() AS proc_time
+              UNION ALL SELECT 'Fred' AS name, PROCTIME() AS proc_time
+              UNION ALL SELECT 'Sarah' AS name, PROCTIME() AS proc_time
+              UNION ALL SELECT 'FAIL_ME' AS name, PROCTIME() AS proc_time
+              UNION ALL SELECT 'Sarah' AS name, PROCTIME() AS proc_time
+            """);
+
+    final var successTable =
+        env.sqlQuery(
+            String.format(
+                """
+            SELECT
+              E.name AS name,
+              G.message AS message,
+              grpc_status_code
+            FROM %s E
+            JOIN Greeter FOR SYSTEM_TIME AS OF E.proc_time AS G
+              ON E.name = G.name
+            WHERE grpc_status_code = 0;
+            """,
+                sourceTable));
+    final var failTable =
+        env.sqlQuery(
+            String.format(
+                """
+            SELECT
+              E.name AS name,
+              'this is a failure message' AS message,
+              grpc_status_code
+            FROM %s E
+            JOIN Greeter FOR SYSTEM_TIME AS OF E.proc_time AS G
+              ON E.name = G.name
+            WHERE grpc_status_code <> 0;
+            """,
+                sourceTable));
+
+    final var sql =
+        String.format("SELECT * FROM %s UNION ALL SELECT * FROM %s", successTable, failTable);
+
+    final var results = ImmutableList.copyOf(env.executeSql(sql).collect());
+
+    Truth.assertThat(results)
+        .containsExactly(
+            Row.of("FAIL_ME", "this is a failure message", 14),
+            Row.of("Sarah", "Hello Sarah", 0),
+            Row.of("Sarah", "Hello Sarah", 0),
+            Row.of("Sarah", "Hello Sarah", 0),
+            Row.of("Fred", "Hello Fred", 0),
+            Row.of("Fred", "Hello Fred", 0));
+    Truth.assertThat(this.grpcRequestCounter.get()).isEqualTo(3);
+  }
+
+  @Test
   @DisplayName("Retries non-error status codes")
   void testRetries() {
     final EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
