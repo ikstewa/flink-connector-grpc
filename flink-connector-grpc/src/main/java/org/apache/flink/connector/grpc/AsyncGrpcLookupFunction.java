@@ -27,6 +27,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -126,6 +127,13 @@ public class AsyncGrpcLookupFunction extends AsyncLookupFunction {
   @Override
   public void close() throws Exception {
     this.grpcClient.close();
+    if (this.requestExecutor instanceof ExecutorService execService) {
+      execService.shutdownNow();
+    }
+    if (this.publishingExecutor instanceof ExecutorService execService) {
+      execService.shutdownNow();
+    }
+    super.close();
   }
 
   @Override
