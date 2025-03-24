@@ -25,7 +25,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -160,7 +159,7 @@ public class AsyncGrpcLookupFunction extends AsyncLookupFunction {
     final var resultFut =
         Futures.catching(
             transformedResult,
-            Exception.class,
+            RuntimeException.class,
             err -> {
               this.grpcErrorCounter.incrementAndGet();
 
@@ -169,7 +168,7 @@ public class AsyncGrpcLookupFunction extends AsyncLookupFunction {
               // Propagate any non-status exceptions
               if (statusErr.isEmpty()) {
                 LOG.error("Found unexpected result error", err);
-                throw new CompletionException(err);
+                throw err;
               }
 
               LOG.debug(
