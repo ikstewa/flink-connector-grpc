@@ -5,7 +5,7 @@ plugins {
     jacoco
     `maven-publish`
     signing
-    id("com.diffplug.spotless") version "6.25.0"
+    id("com.diffplug.spotless") version "7.0.2"
     id("com.google.protobuf") version "0.9.4"
     id("org.pkl-lang") version("0.26.2")
 }
@@ -24,10 +24,10 @@ repositories {
 
 dependencies {
     api(platform("org.apache.logging.log4j:log4j-bom:2.24.3"))
-    api(platform("io.grpc:grpc-bom:1.69.0"))
+    api(platform("io.grpc:grpc-bom:1.71.0"))
     api(platform("com.google.protobuf:protobuf-bom:3.25.3"))
 
-    implementation("org.pkl-lang:pkl-config-java:0.27.1")
+    implementation("org.pkl-lang:pkl-config-java:0.28.1")
 
     implementation("org.apache.logging.log4j:log4j-api")
 
@@ -152,11 +152,11 @@ signing {
 
 protobuf {
     protoc {
-        artifact = "com.google.protobuf:protoc:3.25.5"
+        artifact = "com.google.protobuf:protoc:3.25.6"
     }
     plugins {
         create("grpc") {
-            artifact = "io.grpc:protoc-gen-grpc-java:1.69.0"
+            artifact = "io.grpc:protoc-gen-grpc-java:1.71.0"
         }
     }
     generateProtoTasks {

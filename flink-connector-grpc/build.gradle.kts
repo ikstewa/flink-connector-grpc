@@ -3,7 +3,7 @@ plugins {
     jacoco
     `maven-publish`
     signing
-    id("com.diffplug.spotless") version "6.25.0"
+    id("com.diffplug.spotless") version "7.0.2"
     id("com.google.protobuf") version "0.9.4"
 }
 
@@ -22,7 +22,7 @@ repositories {
 val flinkVersion: String by rootProject.extra
 dependencies {
     api(platform("org.apache.logging.log4j:log4j-bom:2.24.3"))
-    api(platform("io.grpc:grpc-bom:1.69.0"))
+    api(platform("io.grpc:grpc-bom:1.71.0"))
 
     implementation("com.google.code.findbugs:jsr305:3.0.2")
 
@@ -33,10 +33,10 @@ dependencies {
     implementation("io.grpc:grpc-protobuf")
     implementation("io.grpc:grpc-services")
     implementation("io.grpc:grpc-netty-shaded")
-    implementation("com.google.code.gson:gson:2.11.0")
+    implementation("com.google.code.gson:gson:2.12.1")
     implementation("com.google.auto.service:auto-service-annotations:1.1.1")
     implementation("org.apache.flink:flink-protobuf:$flinkVersion")
-    implementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
+    implementation("com.github.ben-manes.caffeine:caffeine:3.2.0")
 
     compileOnly("org.apache.flink:flink-table-api-java:$flinkVersion")
 
@@ -148,11 +148,11 @@ signing {
 
 protobuf {
     protoc {
-        artifact = "com.google.protobuf:protoc:3.25.5"
+        artifact = "com.google.protobuf:protoc:3.25.6"
     }
     plugins {
         create("grpc") {
-            artifact = "io.grpc:protoc-gen-grpc-java:1.69.0"
+            artifact = "io.grpc:protoc-gen-grpc-java:1.71.0"
         }
     }
     generateProtoTasks {

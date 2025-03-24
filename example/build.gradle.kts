@@ -2,8 +2,8 @@
 plugins {
     application
     id("com.google.protobuf") version "0.9.4"
-    id("com.google.cloud.tools.jib") version "3.4.4"
-    id("com.gradleup.shadow") version "8.3.5"
+    id("com.google.cloud.tools.jib") version "3.4.5"
+    id("com.gradleup.shadow") version "8.3.6"
 }
 
 java {
@@ -43,11 +43,11 @@ dependencies {
 
 protobuf {
     protoc {
-        artifact = "com.google.protobuf:protoc:3.25.5"
+        artifact = "com.google.protobuf:protoc:3.25.6"
     }
     plugins {
         create("grpc") {
-            artifact = "io.grpc:protoc-gen-grpc-java:1.69.0"
+            artifact = "io.grpc:protoc-gen-grpc-java:1.71.0"
         }
     }
     generateProtoTasks {
