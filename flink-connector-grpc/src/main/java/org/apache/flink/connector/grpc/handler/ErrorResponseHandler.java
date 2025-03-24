@@ -18,6 +18,7 @@ package org.apache.flink.connector.grpc.handler;
 import io.grpc.StatusRuntimeException;
 import java.util.Set;
 import javax.annotation.Nullable;
+import org.apache.flink.util.FlinkRuntimeException;
 
 /** Delegating response handler that throws on a configurable set of status codes. */
 public record ErrorResponseHandler<ReqT, RespT, ProducedT>(
@@ -28,7 +29,8 @@ public record ErrorResponseHandler<ReqT, RespT, ProducedT>(
   public ProducedT handle(
       ReqT request, @Nullable RespT response, @Nullable StatusRuntimeException error) {
     if (error != null && errorCodes().contains(error.getStatus().getCode().value())) {
-      throw error;
+      // Throw a new exception here as the Status in StatusRuntimeException is not serializeable
+      throw new FlinkRuntimeException("GRPC request failed after retries: " + error.getMessage());
     } else {
       return handler.handle(request, response, error);
     }

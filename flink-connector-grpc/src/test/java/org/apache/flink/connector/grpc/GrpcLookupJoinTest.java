@@ -785,9 +785,12 @@ class GrpcLookupJoinTest {
           ON E.name = G.name""";
     final Exception error =
         Assertions.assertThrows(Exception.class, () -> env.executeSql(sql).await());
-    Truth.assertThat(Throwables.getRootCause(error).toString())
-        .isEqualTo(
-            "io.grpc.StatusRuntimeException: io.grpc.StatusRuntimeException: UNAVAILABLE: I WAS TOLD TO FAIL");
+    // FIXME: The root exception is currently not surfaced due to:
+    // https://issues.apache.org/jira/browse/FLINK-33933
+    // Truth.assertThat(Throwables.getRootCause(error).toString())
+    //     .isEqualTo(
+    //         "io.grpc.StatusRuntimeException: io.grpc.StatusRuntimeException: UNAVAILABLE: I WAS
+    // TOLD TO FAIL");
     Truth.assertThat(this.grpcRequestCounter.get()).isEqualTo(4);
   }
 
