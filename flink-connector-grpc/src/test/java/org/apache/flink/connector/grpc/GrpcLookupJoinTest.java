@@ -659,7 +659,7 @@ class GrpcLookupJoinTest {
         Assertions.assertThrows(Exception.class, () -> env.executeSql(sql).await());
     Truth.assertThat(Throwables.getRootCause(error).toString())
         .isEqualTo(
-            "io.grpc.StatusRuntimeException: io.grpc.StatusRuntimeException: UNAVAILABLE: I WAS TOLD TO FAIL");
+            "org.apache.flink.util.FlinkRuntimeException: GRPC request failed after retries: UNAVAILABLE: I WAS TOLD TO FAIL");
     Truth.assertThat(this.grpcRequestCounter.get()).isEqualTo(4);
   }
 
@@ -742,7 +742,7 @@ class GrpcLookupJoinTest {
         Assertions.assertThrows(Exception.class, () -> env.executeSql(sql).await());
     Truth.assertThat(Throwables.getRootCause(error).toString())
         .isEqualTo(
-            "io.grpc.StatusRuntimeException: io.grpc.StatusRuntimeException: UNAVAILABLE: I WAS TOLD TO FAIL");
+            "org.apache.flink.util.FlinkRuntimeException: GRPC request failed after retries: UNAVAILABLE: I WAS TOLD TO FAIL");
     Truth.assertThat(this.grpcRequestCounter.get()).isEqualTo(4);
   }
 
