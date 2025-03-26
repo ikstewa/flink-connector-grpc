@@ -71,8 +71,9 @@ class GrpcLookupJoinTest {
   }
 
   @AfterEach
-  void shtudownGrpcService() throws IOException {
+  void shtudownGrpcService() throws IOException, InterruptedException {
     grpcServer.shutdownNow();
+    grpcServer.awaitTermination();
     grpcServer = null;
   }
 
@@ -658,8 +659,7 @@ class GrpcLookupJoinTest {
         Assertions.assertThrows(Exception.class, () -> env.executeSql(sql).await());
     Truth.assertThat(Throwables.getRootCause(error).toString())
         .isEqualTo(
-            "io.grpc.StatusRuntimeException: io.grpc.StatusRuntimeException: UNAVAILABLE: I WAS TOLD TO FAIL");
-
+            "org.apache.flink.util.FlinkRuntimeException: GRPC request failed after retries: UNAVAILABLE: I WAS TOLD TO FAIL");
     Truth.assertThat(this.grpcRequestCounter.get()).isEqualTo(4);
   }
 
@@ -699,6 +699,154 @@ class GrpcLookupJoinTest {
 
     Truth.assertThat(successResults).containsExactly(Row.of("TIMEOUT", 4));
     Truth.assertThat(this.grpcRequestCounter.get()).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("Exposes errors when using cache")
+  void testCacheErrors() {
+    final EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
+    final TableEnvironment env = TableEnvironment.create(settings);
+
+    env.executeSql(
+        """
+      CREATE TABLE Greeter (
+        grpc_status_code INT METADATA FROM 'status-code',
+        message STRING NOT NULL,
+        name STRING NOT NULL
+      ) WITH (
+        'connector' = 'grpc-lookup',
+        'host' = 'localhost',
+        'port' = '50051',
+        'use-plain-text' = 'true',
+        'async' = 'false',
+        'lookup.cache' = 'PARTIAL',
+        'lookup.partial-cache.expire-after-write' = '1h',
+        'lookup.partial-cache.max-rows' = '1000',
+        'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod',
+        'grpc-retry-codes' = '1;14',
+        'grpc-error-codes' = '4;14',
+        'lookup.max-retries' = '4'
+      );""");
+
+    final var sql =
+        """
+        SELECT
+          E.name,
+          G.grpc_status_code
+        FROM (
+          SELECT 'FAIL_ME' AS name, PROCTIME() AS proc_time
+        ) E
+        JOIN Greeter FOR SYSTEM_TIME AS OF E.proc_time AS G
+          ON E.name = G.name""";
+    final Exception error =
+        Assertions.assertThrows(Exception.class, () -> env.executeSql(sql).await());
+    Truth.assertThat(Throwables.getRootCause(error).toString())
+        .isEqualTo(
+            "org.apache.flink.util.FlinkRuntimeException: GRPC request failed after retries: UNAVAILABLE: I WAS TOLD TO FAIL");
+    Truth.assertThat(this.grpcRequestCounter.get()).isEqualTo(4);
+  }
+
+  @Test
+  @DisplayName("Exposes errors when using cache async")
+  void testCacheErrorsAsync() {
+    final EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
+    final TableEnvironment env = TableEnvironment.create(settings);
+
+    env.executeSql(
+        """
+      CREATE TABLE Greeter (
+        grpc_status_code INT METADATA FROM 'status-code',
+        message STRING NOT NULL,
+        name STRING NOT NULL
+      ) WITH (
+        'connector' = 'grpc-lookup',
+        'host' = 'localhost',
+        'port' = '50051',
+        'use-plain-text' = 'true',
+        'async' = 'true',
+        'lookup.cache' = 'PARTIAL',
+        'lookup.partial-cache.expire-after-write' = '1h',
+        'lookup.partial-cache.max-rows' = '1000',
+        'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod',
+        'grpc-retry-codes' = '1;14',
+        'grpc-error-codes' = '4;14',
+        'lookup.max-retries' = '4'
+      );""");
+
+    final var sql =
+        """
+        SELECT
+          E.name,
+          G.grpc_status_code
+        FROM (
+          SELECT 'FAIL_ME' AS name, PROCTIME() AS proc_time
+        ) E
+        JOIN Greeter FOR SYSTEM_TIME AS OF E.proc_time AS G
+          ON E.name = G.name""";
+    final Exception error =
+        Assertions.assertThrows(Exception.class, () -> env.executeSql(sql).await());
+    // FIXME: The root exception is currently not surfaced due to:
+    // https://issues.apache.org/jira/browse/FLINK-33933
+    // Truth.assertThat(Throwables.getRootCause(error).toString())
+    //     .isEqualTo(
+    //         "io.grpc.StatusRuntimeException: io.grpc.StatusRuntimeException: UNAVAILABLE: I WAS
+    // TOLD TO FAIL");
+    Truth.assertThat(this.grpcRequestCounter.get()).isEqualTo(4);
+  }
+
+  @Test
+  @DisplayName("Exposes grpc status codes when using cache")
+  void testCacheErrorNoFail() {
+    final EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
+    final TableEnvironment env = TableEnvironment.create(settings);
+
+    env.executeSql(
+        """
+          CREATE TABLE Greeter (
+            grpc_status_code INT METADATA FROM 'status-code',
+            message STRING NOT NULL,
+            name STRING NOT NULL
+          ) WITH (
+            'connector' = 'grpc-lookup',
+            'host' = 'localhost',
+            'port' = '50051',
+            'use-plain-text' = 'true',
+            'lookup.cache' = 'PARTIAL',
+            'lookup.partial-cache.expire-after-write' = '1h',
+            'lookup.partial-cache.max-rows' = '1000',
+            'grpc-method-desc' = 'io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod',
+            'grpc-retry-codes' = '1;14',
+            'grpc-error-codes' = '4',
+            'lookup.max-retries' = '4'
+          );""");
+
+    final var sql =
+        """
+            SELECT
+              E.name,
+              G.grpc_status_code
+            FROM (
+              SELECT 'FAIL_ME' AS name, PROCTIME() AS proc_time
+              UNION ALL SELECT 'Sarah' AS name, PROCTIME() AS proc_time
+              UNION ALL SELECT 'Fred' AS name, PROCTIME() AS proc_time
+              UNION ALL SELECT 'Fred' AS name, PROCTIME() AS proc_time
+              UNION ALL SELECT 'Sarah' AS name, PROCTIME() AS proc_time
+              UNION ALL SELECT 'Fred' AS name, PROCTIME() AS proc_time
+              UNION ALL SELECT 'Sarah' AS name, PROCTIME() AS proc_time
+            ) E
+            JOIN Greeter FOR SYSTEM_TIME AS OF E.proc_time AS G
+              ON E.name = G.name""";
+    final var results = ImmutableList.copyOf(env.executeSql(sql).collect());
+    Truth.assertThat(results)
+        .containsExactly(
+            Row.of("FAIL_ME", 14),
+            Row.of("Sarah", 0),
+            Row.of("Sarah", 0),
+            Row.of("Sarah", 0),
+            Row.of("Fred", 0),
+            Row.of("Fred", 0),
+            Row.of("Fred", 0));
+    Truth.assertThat(this.grpcRequestCounter.get()).isEqualTo(6);
   }
 
   @Test
