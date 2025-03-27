@@ -25,7 +25,7 @@ repositories {
 dependencies {
     api(platform("org.apache.logging.log4j:log4j-bom:2.24.3"))
     api(platform("io.grpc:grpc-bom:1.71.0"))
-    api(platform("com.google.protobuf:protobuf-bom:3.25.3"))
+    api(platform("com.google.protobuf:protobuf-bom:4.30.2"))
 
     implementation("org.pkl-lang:pkl-config-java:0.28.1")
 
