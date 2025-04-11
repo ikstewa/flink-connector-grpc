@@ -54,18 +54,29 @@ class ConfigWatcher {
       new Thread(
               () -> {
                 try {
-                  this.server.start(findConfigFile(path));
+                  try {
+                    this.server.start(findConfigFile(path));
+                  } catch (Exception e) {
+                    LOG.warn(
+                        "Failed to start service with provided config. Waiting for updates...", e);
+                  }
                   WatchKey key;
                   while ((key = watchService.take()) != null) {
                     // clear out events and search for new config
                     key.pollEvents();
-                    this.server.start(findConfigFile(path));
+                    try {
+                      this.server.start(findConfigFile(path));
+                    } catch (Exception e) {
+                      LOG.warn(
+                          "Failed to start service with provided config. Waiting for updates...",
+                          e);
+                    }
                     if (!key.reset()) {
-                      throw new RuntimeException("WatchKey no longer valid");
+                      LOG.error("Failed to reset file watch key. Retrying...");
                     }
                   }
                 } catch (Exception e) {
-                  LOG.error("Exception encountered. Shutting down ConfigWatcher", e);
+                  LOG.error("Unexpected exception encountered. Shutting down ConfigWatcher", e);
                   this.shutdown();
                 }
               },
