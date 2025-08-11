@@ -3,7 +3,7 @@ plugins {
     application
     id("com.google.protobuf") version "0.9.4"
     id("com.google.cloud.tools.jib") version "3.4.5"
-    id("com.gradleup.shadow") version "8.3.6"
+    id("com.gradleup.shadow") version "9.0.1"
 }
 
 java {
