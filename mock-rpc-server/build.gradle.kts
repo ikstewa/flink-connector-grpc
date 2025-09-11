@@ -40,7 +40,7 @@ dependencies {
 
     testImplementation("org.apache.logging.log4j:log4j-core")
     testImplementation("javax.annotation:javax.annotation-api:1.3.2")
-    testImplementation("com.google.truth:truth:1.4.4")
+    testImplementation("com.google.truth:truth:1.4.5")
 }
 
 testing {
