@@ -26,7 +26,6 @@ dependencies {
 
     implementation("com.google.code.findbugs:jsr305:3.0.2")
 
-
     implementation("org.apache.logging.log4j:log4j-api")
     implementation("javax.annotation:javax.annotation-api:1.3.2")
 
@@ -57,7 +56,6 @@ dependencies {
 
     testImplementation("com.google.truth.extensions:truth-java8-extension:1.4.5")
     testImplementation("com.google.truth:truth:1.4.5")
-
 }
 
 testing {
@@ -67,9 +65,9 @@ testing {
             targets {
                 all {
                     testTask.configure {
-                      testLogging {
-                       showStandardStreams = true
-                      }
+                        testLogging {
+                            showStandardStreams = true
+                        }
                     }
                 }
             }
@@ -95,7 +93,7 @@ spotless {
         target("*.gradle.kts", "*.gradle", "*.md", ".gitignore")
 
         trimTrailingWhitespace()
-        indentWithSpaces()
+        leadingTabsToSpaces()
         endWithNewline()
     }
 

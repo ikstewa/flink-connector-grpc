@@ -7,7 +7,7 @@ plugins {
     signing
     id("com.diffplug.spotless") version "7.0.2"
     id("com.google.protobuf") version "0.9.5"
-    id("org.pkl-lang") version("0.26.2")
+    id("org.pkl-lang") version ("0.26.2")
 }
 
 java {
@@ -50,23 +50,23 @@ testing {
             targets {
                 all {
                     testTask.configure {
-                      testLogging {
-                       showStandardStreams = true
-                       showExceptions = true
-                       showCauses = true
-                       showStackTraces = true
-                       exceptionFormat = TestExceptionFormat.FULL
-                       showStandardStreams = false
-                       events =
-                           setOf(
-                               TestLogEvent.STANDARD_OUT,
-                               TestLogEvent.STANDARD_ERROR,
-                               TestLogEvent.STARTED,
-                               TestLogEvent.PASSED,
-                               TestLogEvent.SKIPPED,
-                               TestLogEvent.FAILED,
-                           )
-                      }
+                        testLogging {
+                            showStandardStreams = true
+                            showExceptions = true
+                            showCauses = true
+                            showStackTraces = true
+                            exceptionFormat = TestExceptionFormat.FULL
+                            showStandardStreams = false
+                            events =
+                                setOf(
+                                    TestLogEvent.STANDARD_OUT,
+                                    TestLogEvent.STANDARD_ERROR,
+                                    TestLogEvent.STARTED,
+                                    TestLogEvent.PASSED,
+                                    TestLogEvent.SKIPPED,
+                                    TestLogEvent.FAILED,
+                                )
+                        }
                     }
                 }
             }
@@ -90,7 +90,7 @@ spotless {
         target("*.gradle.kts", "*.gradle", "*.md", ".gitignore")
 
         trimTrailingWhitespace()
-        indentWithSpaces()
+        leadingTabsToSpaces()
         endWithNewline()
     }
 
@@ -107,12 +107,12 @@ spotless {
 }
 
 pkl {
-  javaCodeGenerators {
-    register("configClasses") {
-      sourceModules.set(files("src/main/resources/MockServer.pkl"))
-      generateJavadoc.set(true)
+    javaCodeGenerators {
+        register("configClasses") {
+            sourceModules.set(files("src/main/resources/MockServer.pkl"))
+            generateJavadoc.set(true)
+        }
     }
-  }
 }
 
 publishing {
