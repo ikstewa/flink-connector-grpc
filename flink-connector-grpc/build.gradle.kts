@@ -22,7 +22,7 @@ repositories {
 val flinkVersion: String by rootProject.extra
 dependencies {
     api(platform("org.apache.logging.log4j:log4j-bom:2.25.2"))
-    api(platform("io.grpc:grpc-bom:1.71.0"))
+    api(platform("io.grpc:grpc-bom:1.75.0"))
 
     implementation("com.google.code.findbugs:jsr305:3.0.2")
 
@@ -150,7 +150,7 @@ protobuf {
     }
     plugins {
         create("grpc") {
-            artifact = "io.grpc:protoc-gen-grpc-java:1.71.0"
+            artifact = "io.grpc:protoc-gen-grpc-java:1.75.0"
         }
     }
     generateProtoTasks {
