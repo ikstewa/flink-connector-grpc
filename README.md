@@ -1,4 +1,5 @@
 # flink-connector-grpc
+
 gRPC Connector for Apache Flink.
 
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.ikstewa/flink-connector-grpc)](https://central.sonatype.com/artifact/io.github.ikstewa/flink-connector-grpc)
@@ -9,23 +10,28 @@ The primary use case for the gRPC connector is to be used in a [Lookup Join](htt
 
 ## TODO
 
-* Sink - Add Table Sink support to egress via gRPC
-* Auth - Currently assuming internal private networks
-* Cacheable error codes (configurable)
+- Sink - Add Table Sink support to egress via gRPC
+- Auth - Currently assuming internal private networks
+- Cacheable error codes (configurable)
 
 ## Example Usage
 
 The following steps will setup a sql-client REPL for demonstrating the Lookup Join:
 
 1. Compile the test GRPC server:
+
 ```shell
 ./gradlew jibDockerBuild
 ```
+
 1. Build the flink runtime dependencies:
+
 ```shell
 ./gradlew shadowJar
 ```
+
 1. Start the services:
+
 ```shell
 docker compose -f example/docker-compose.yaml run --rm --name sql-client sql-client
 ```
@@ -35,6 +41,7 @@ docker compose -f example/docker-compose.yaml run --rm --name sql-client sql-cli
 Flink SQL table definition:
 
 Data Source Table
+
 ```roomsql
 CREATE TABLE NamedEvents (
   name STRING,
@@ -51,6 +58,7 @@ CREATE TABLE NamedEvents (
 ```
 
 Enrichment Lookup Table
+
 ```roomsql
 CREATE TABLE Greeter (
   message STRING,
@@ -76,13 +84,13 @@ FROM NamedEvents AS E
     AND E.last_name = G.last_name;
 ```
 
-
-The columns specified as the `PIMARY KEY` and used for the JOIN `ON` condition will be converted to the configured proto `request` object.
+The columns specified as the `PIMARY KEY` and used for the JOIN `ON` condition
+will be converted to the configured proto `request` object.
 
 ### Advanced Config
 
 Lookup cache can be enabled and configured using standard config:
-https://nightlies.apache.org/flink/flink-docs-release-1.20/docs/connectors/table/jdbc/#lookup-cache-1
+<https://nightlies.apache.org/flink/flink-docs-release-1.20/docs/connectors/table/jdbc/#lookup-cache-1>
 
 ```roomsql
 CREATE TABLE Greeter (
@@ -137,18 +145,23 @@ CREATE TABLE Greeter (
 );
 ```
 
-
 ### Metadata
 
 The following metadata fields are available:
 
-| Key | Data Type | Description |
-| --- | --- | --- |
-| `status-code` | INT NOT NULL | The GRPC response status code |
-| `status-description` | STRING | The GRPC response status description. Includes only non-OK responses. |
-| `status-trailers` | MAP<STRING NOT NULL, STRING> NOT NULL | The GRPC response trailers for non-OK responses. Includes only string value fields. |
-| `status-trailers-bin` | MAP<STRING NOT NULL, VARBINARY> NOT NULL | The GRPC response trailers for non-OK responses. Includes only binary value fields. |
-| `response-time` | BIGINT NOT NULL | The current system time of when the response was processed. Note: May not be the same value for deduplicated requests. The value is the same for cached responses. |
+<!-- markdownlint-disable MD013 -->
+
+| Key                   | Data Type                                | Description                                                                                 |
+| --------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `status-code`         | INT NOT NULL                             | The GRPC response status code                                                               |
+| `status-description`  | STRING                                   | The GRPC response status description. Includes only non-OK responses.                       |
+| `status-trailers`     | MAP<STRING NOT NULL, STRING> NOT NULL    | The GRPC response trailers for non-OK responses. Includes only string value fields.         |
+| `status-trailers-bin` | MAP<STRING NOT NULL, VARBINARY> NOT NULL | The GRPC response trailers for non-OK responses. Includes only binary value fields.         |
+| `response-time`       | BIGINT NOT NULL                          | The current system time of when the response was processed.                                 |
+|                       |                                          | Note: May not be the same value for deduplicated requests. The value is the same for cached |
+|                       |                                          | responses.                                                                                  |
+
+<!-- markdownlint-enable MD013 -->
 
 ```roomsql
 CREATE TABLE Greeter (
@@ -164,9 +177,9 @@ CREATE TABLE Greeter (
 );
 ```
 
-
 # Development
 
 ## Publish
+
 To publish a new release:
 `./gradlew publishToSonatype closeAndReleaseSonatypeStagingRepository`
