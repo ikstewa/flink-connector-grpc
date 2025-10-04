@@ -3,23 +3,19 @@ plugins {
     jacoco
     `maven-publish`
     signing
-    id("com.diffplug.spotless") version "8.0.0"
     id("com.google.protobuf") version "0.9.5"
 }
 
 java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
-    }
+    toolchain { languageVersion = JavaLanguageVersion.of(17) }
     withJavadocJar()
     withSourcesJar()
 }
 
-repositories {
-    mavenCentral()
-}
+repositories { mavenCentral() }
 
 val flinkVersion: String by rootProject.extra
+
 dependencies {
     api(platform("org.apache.logging.log4j:log4j-bom:2.25.2"))
     api(platform("io.grpc:grpc-bom:1.75.0"))
@@ -60,25 +56,20 @@ dependencies {
 
 testing {
     suites {
-        val test by getting(JvmTestSuite::class) {
-            useJUnitJupiter()
-            targets {
-                all {
-                    testTask.configure {
-                        testLogging {
-                            showStandardStreams = true
-                        }
-                    }
-                }
+        val test by
+            getting(JvmTestSuite::class) {
+                useJUnitJupiter()
+                targets { all { testTask.configure { testLogging { showStandardStreams = true } } } }
             }
-        }
     }
 }
+
 tasks.test {
     finalizedBy(tasks.jacocoTestReport) // report is always generated after tests run
     // systemProperty("log4j2.configurationFile", "log4j2-test.xml")
     // systemProperty("sun.io.serialization.extendedDebugInfo", "true")
 }
+
 tasks.jacocoTestReport {
     dependsOn(tasks.test) // tests are required to run before generating the report
     reports {
@@ -88,16 +79,6 @@ tasks.jacocoTestReport {
 }
 
 spotless {
-    // generic formatting for miscellaneous files
-    format("misc") {
-        target("*.gradle.kts", "*.gradle", "*.md", ".gitignore")
-
-        trimTrailingWhitespace()
-        leadingTabsToSpaces()
-        endWithNewline()
-    }
-
-    // chose the Google java formatter, version 1.9
     java {
         targetExclude("**/build/generated/**")
         importOrder()
@@ -140,24 +121,10 @@ publishing {
     }
 }
 
-signing {
-    sign(publishing.publications["mavenJava"])
-}
+signing { sign(publishing.publications["mavenJava"]) }
 
 protobuf {
-    protoc {
-        artifact = "com.google.protobuf:protoc:3.25.8"
-    }
-    plugins {
-        create("grpc") {
-            artifact = "io.grpc:protoc-gen-grpc-java:1.75.0"
-        }
-    }
-    generateProtoTasks {
-        ofSourceSet("test").forEach {
-            it.plugins {
-                create("grpc") { }
-            }
-        }
-    }
+    protoc { artifact = "com.google.protobuf:protoc:3.25.8" }
+    plugins { create("grpc") { artifact = "io.grpc:protoc-gen-grpc-java:1.75.0" } }
+    generateProtoTasks { ofSourceSet("test").forEach { it.plugins { create("grpc") {} } } }
 }

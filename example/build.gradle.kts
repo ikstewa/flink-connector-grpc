@@ -1,4 +1,3 @@
-
 plugins {
     application
     id("com.google.protobuf") version "0.9.5"
@@ -6,25 +5,32 @@ plugins {
     id("com.gradleup.shadow") version "9.2.2"
 }
 
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
-    }
-}
+java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }
 
-application {
-    mainClass = "io.mock.grpc.MockJsonRpcServer"
-}
+application { mainClass = "io.mock.grpc.MockJsonRpcServer" }
+
 jib.to.image = "example-grpc-server"
+
 jib.container.mainClass = application.mainClass.get()
 
-repositories {
-    mavenCentral()
+repositories { mavenCentral() }
+
+spotless {
+    java {
+        targetExclude("**/build/generated/**")
+        importOrder()
+        removeUnusedImports()
+        googleJavaFormat()
+
+        // and apply a license header
+        licenseHeaderFile(rootProject.file("HEADER"))
+    }
 }
 
 // Gradle configuration for loading flink libs for docker build
 val flinkLib by configurations.creating
 val flinkVersion: String by rootProject.extra
+
 dependencies {
     implementation(platform("org.apache.logging.log4j:log4j-bom:2.25.2"))
 
@@ -41,21 +47,9 @@ dependencies {
 }
 
 protobuf {
-    protoc {
-        artifact = "com.google.protobuf:protoc:3.25.8"
-    }
-    plugins {
-        create("grpc") {
-            artifact = "io.grpc:protoc-gen-grpc-java:1.75.0"
-        }
-    }
-    generateProtoTasks {
-        ofSourceSet("main").forEach {
-            it.plugins {
-                create("grpc") { }
-            }
-        }
-    }
+    protoc { artifact = "com.google.protobuf:protoc:3.25.8" }
+    plugins { create("grpc") { artifact = "io.grpc:protoc-gen-grpc-java:1.75.0" } }
+    generateProtoTasks { ofSourceSet("main").forEach { it.plugins { create("grpc") {} } } }
 }
 
 tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
