@@ -6,7 +6,7 @@ plugins {
     `maven-publish`
     signing
     id("com.diffplug.spotless") version "7.0.2"
-    id("com.google.protobuf") version "0.9.4"
+    id("com.google.protobuf") version "0.9.5"
     id("org.pkl-lang") version("0.26.2")
 }
 
