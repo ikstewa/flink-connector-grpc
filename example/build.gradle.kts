@@ -18,7 +18,6 @@ application {
 jib.to.image = "example-grpc-server"
 jib.container.mainClass = application.mainClass.get()
 
-
 repositories {
     mavenCentral()
 }
@@ -60,7 +59,8 @@ protobuf {
 }
 
 tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
-  mergeServiceFiles()
-  configurations = listOf(flinkLib)
-  archiveVersion.set("")
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    mergeServiceFiles()
+    configurations = listOf(flinkLib)
+    archiveVersion.set("")
 }
