@@ -32,7 +32,7 @@ dependencies {
     implementation("io.grpc:grpc-netty-shaded")
     implementation("com.google.protobuf:protobuf-java-util")
 
-    implementation("com.dashjoin:jsonata:0.9.8")
+    implementation("com.dashjoin:jsonata:0.9.9")
 
     testImplementation("org.apache.logging.log4j:log4j-core")
     testImplementation("javax.annotation:javax.annotation-api:1.3.2")
