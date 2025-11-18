@@ -1,7 +1,7 @@
 plugins {
     application
     id("com.google.protobuf") version "0.9.5"
-    id("com.google.cloud.tools.jib") version "3.4.5"
+    id("com.google.cloud.tools.jib") version "3.5.0"
     id("com.gradleup.shadow") version "9.2.2"
 }
 
