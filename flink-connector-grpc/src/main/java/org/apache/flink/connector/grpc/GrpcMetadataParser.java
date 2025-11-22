@@ -13,31 +13,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-package org.apache.flink.connector.grpc.handler;
+package org.apache.flink.connector.grpc;
 
 import io.grpc.Metadata;
 import io.grpc.StatusRuntimeException;
+import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import org.apache.flink.connector.grpc.GrpcMetadataField;
 import org.apache.flink.table.data.GenericMapData;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.MapData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
-import org.apache.flink.table.data.utils.JoinedRowData;
+import org.jspecify.annotations.Nullable;
 
 /** Response handler that amends metadata fields to the end of a delegate response handler */
-public record MetadataResponseHandler<ReqT, RespT>(
-    List<GrpcMetadataField> metaFields, GrpcResponseHandler<ReqT, RespT, RowData> handler)
-    implements GrpcResponseHandler<ReqT, RespT, RowData> {
+public record GrpcMetadataParser(List<GrpcMetadataField> metaFields) implements Serializable {
 
   private static final MapData EMPTY_MAP = new GenericMapData(Map.of());
 
-  @Override
-  public RowData handle(ReqT request, RespT response, StatusRuntimeException error) {
+  public RowData toRow(@Nullable StatusRuntimeException error) {
     final var metadataRow = new GenericRowData(metaFields.size());
     for (var i = 0; i < metaFields.size(); i++) {
       final var metaVal =
@@ -60,7 +57,7 @@ public record MetadataResponseHandler<ReqT, RespT>(
           };
       metadataRow.setField(i, metaVal);
     }
-    return new JoinedRowData(handler.handle(request, response, error), metadataRow);
+    return metadataRow;
   }
 
   private static MapData toStringMapData(Metadata meta) {

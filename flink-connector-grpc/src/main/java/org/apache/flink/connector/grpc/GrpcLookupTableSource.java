@@ -25,9 +25,7 @@ import java.util.stream.Stream;
 import javax.annotation.Nullable;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.serialization.SerializationSchema;
-import org.apache.flink.connector.grpc.handler.ErrorResponseHandler;
 import org.apache.flink.connector.grpc.handler.GrpcResponseHandler;
-import org.apache.flink.connector.grpc.handler.MetadataResponseHandler;
 import org.apache.flink.connector.grpc.util.Projections;
 import org.apache.flink.table.connector.Projection;
 import org.apache.flink.table.connector.format.DecodingFormat;
@@ -45,6 +43,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.utils.JoinedRowData;
 import org.apache.flink.table.data.utils.ProjectedRowData;
 import org.apache.flink.table.types.DataType;
+import org.apache.flink.util.FlinkRuntimeException;
 
 class GrpcLookupTableSource implements LookupTableSource, SupportsReadingMetadata {
 
@@ -119,25 +118,30 @@ class GrpcLookupTableSource implements LookupTableSource, SupportsReadingMetadat
         this.responseFormat.createRuntimeDecoder(
             lookupContext, Projection.of(respProjection).project(this.physicalRowDataType));
 
-    final GrpcResponseHandler<RowData, RowData, RowData> joinedResponseHandler =
-        (reqRow, respRow, error) ->
-            new JoinedRowData(
-                reqRow, respRow != null ? respRow : new GenericRowData(respProjection.length));
-
-    final var metadataResponseHandler =
-        new ErrorResponseHandler<RowData, RowData, RowData>(
-            Set.copyOf(this.grpcConfig.errorStatusCodes()),
-            new MetadataResponseHandler<>(this.metadataFields, joinedResponseHandler));
-
+    final var metadataParser = new GrpcMetadataParser(this.metadataFields);
+    final var errorCodes = Set.copyOf(this.grpcConfig.errorStatusCodes());
     final GrpcResponseHandler<RowData, RowData, RowData> responseHandler =
-        (reqRow, respRow, error) ->
-            ProjectedRowData.from(resultProjection)
-                .replaceRow(metadataResponseHandler.handle(reqRow, respRow, error));
+        (reqRow, respRow, error) -> {
+          if (error != null && errorCodes.contains(error.getStatus().getCode().value())) {
+            // Throw a flink exception as StatusRuntimeException is not serializeable
+            throw new FlinkRuntimeException(
+                "GRPC request failed after retries: " + error.getMessage());
+          }
+          final var resultRow =
+              new JoinedRowData(
+                  new JoinedRowData(
+                      reqRow,
+                      respRow != null ? respRow : new GenericRowData(respProjection.length)),
+                  metadataParser.toRow(error));
+          return ProjectedRowData.from(resultProjection).replaceRow(resultRow);
+        };
 
     final var requestHandler =
         (Function<RowData, RowData> & Serializable)
             req -> {
-              // Trim request: Metadata filters can show up in request row
+              // When queries filter by metadata such as stats_code = 0, the value will show up as a
+              // column in the request row. Trim the request so it includes only the lookup columns.
+              // We will extract out the metadata columns from the response instead.
               if (req.getArity() == reqProjection.length) {
                 return req;
               } else {
