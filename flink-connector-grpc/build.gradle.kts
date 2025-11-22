@@ -31,7 +31,7 @@ dependencies {
     implementation("com.google.code.gson:gson:2.13.2")
     implementation("com.google.auto.service:auto-service-annotations:1.1.1")
     implementation("org.apache.flink:flink-protobuf:$flinkVersion")
-    implementation("com.github.ben-manes.caffeine:caffeine:3.2.2")
+    implementation("com.github.ben-manes.caffeine:caffeine:3.2.3")
 
     compileOnly("org.apache.flink:flink-table-api-java:$flinkVersion")
 
