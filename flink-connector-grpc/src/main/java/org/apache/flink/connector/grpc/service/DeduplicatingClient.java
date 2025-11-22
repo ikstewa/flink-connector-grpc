@@ -26,7 +26,6 @@ import java.time.Duration;
 import java.util.concurrent.Executor;
 import javax.annotation.Nullable;
 import org.apache.flink.table.data.RowData;
-import org.checkerframework.checker.index.qual.NonNegative;
 
 class DeduplicatingClient implements GrpcServiceClient {
 
@@ -87,14 +86,12 @@ class DeduplicatingClient implements GrpcServiceClient {
     }
 
     @Override
-    public long expireAfterUpdate(
-        K key, V value, long currentTime, @NonNegative long currentDuration) {
+    public long expireAfterUpdate(K key, V value, long currentTime, long currentDuration) {
       return currentDuration;
     }
 
     @Override
-    public long expireAfterRead(
-        K key, V value, long currentTime, @NonNegative long currentDuration) {
+    public long expireAfterRead(K key, V value, long currentTime, long currentDuration) {
       return currentDuration;
     }
   }
