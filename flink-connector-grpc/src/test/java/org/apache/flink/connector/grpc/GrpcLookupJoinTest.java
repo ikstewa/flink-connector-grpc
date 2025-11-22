@@ -157,6 +157,7 @@ class GrpcLookupJoinTest {
         'host' = 'localhost',
         'port' = '50051',
         'use-plain-text' = 'true',
+        'async' = 'true',
         'lookup.max-retries' = '10',
         'lookup.cache' = 'PARTIAL',
         'lookup.partial-cache.expire-after-write' = '1h',

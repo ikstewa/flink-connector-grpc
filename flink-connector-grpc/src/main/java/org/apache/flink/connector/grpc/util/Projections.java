@@ -23,8 +23,8 @@ public final class Projections {
   private Projections() {}
 
   // Utility method to create a joined Projection similar to JoinedRowData
-  public static Projection concat(int[][] left, int[][] right) {
-    final int[][] indexes = Stream.of(left, right).flatMap(Stream::of).toArray(int[][]::new);
+  public static Projection concat(int[][]... parts) {
+    final int[][] indexes = Stream.of(parts).flatMap(Stream::of).toArray(int[][]::new);
     return Projection.of(indexes);
   }
 
