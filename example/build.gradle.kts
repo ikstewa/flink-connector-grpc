@@ -32,7 +32,7 @@ val flinkLib by configurations.creating
 val flinkVersion: String by rootProject.extra
 
 dependencies {
-    implementation(platform("org.apache.logging.log4j:log4j-bom:2.25.2"))
+    implementation(platform("org.apache.logging.log4j:log4j-bom:2.25.3"))
 
     implementation(project(":mock-rpc-server"))
     implementation("io.grpc:grpc-protobuf")
