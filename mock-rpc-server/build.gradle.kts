@@ -6,7 +6,7 @@ plugins {
     jacoco
     `maven-publish`
     signing
-    id("com.google.protobuf") version "0.9.5"
+    id("com.google.protobuf") version "0.9.6"
     id("org.pkl-lang") version ("0.26.2")
 }
 
