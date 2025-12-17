@@ -23,7 +23,7 @@ dependencies {
     api(platform("io.grpc:grpc-bom:1.77.0"))
     api(platform("com.google.protobuf:protobuf-bom:3.25.8"))
 
-    implementation("org.pkl-lang:pkl-config-java:0.30.0")
+    implementation("org.pkl-lang:pkl-config-java:0.30.2")
 
     implementation("org.apache.logging.log4j:log4j-api")
 
