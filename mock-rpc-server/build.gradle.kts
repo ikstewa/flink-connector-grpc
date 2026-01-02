@@ -18,10 +18,14 @@ java {
 
 repositories { mavenCentral() }
 
+val flinkVersion: String by rootProject.extra
+val protobufVersion: String by rootProject.extra
+val grpcVersion: String by rootProject.extra
+
 dependencies {
     api(platform("org.apache.logging.log4j:log4j-bom:2.25.3"))
-    api(platform("io.grpc:grpc-bom:1.78.0"))
-    api(platform("com.google.protobuf:protobuf-bom:3.25.8"))
+    api(platform("io.grpc:grpc-bom:$grpcVersion"))
+    api(platform("com.google.protobuf:protobuf-bom:$protobufVersion"))
 
     implementation("org.pkl-lang:pkl-config-java:0.30.2")
 
@@ -138,7 +142,7 @@ publishing {
 signing { sign(publishing.publications["mavenJava"]) }
 
 protobuf {
-    protoc { artifact = "com.google.protobuf:protoc:3.25.8" }
-    plugins { create("grpc") { artifact = "io.grpc:protoc-gen-grpc-java:1.78.0" } }
+    protoc { artifact = "com.google.protobuf:protoc:$protobufVersion" }
+    plugins { create("grpc") { artifact = "io.grpc:protoc-gen-grpc-java:$grpcVersion" } }
     generateProtoTasks { ofSourceSet("test").forEach { it.plugins { create("grpc") {} } } }
 }

@@ -41,3 +41,5 @@ nexusPublishing {
 }
 
 val flinkVersion by extra("2.2.0")
+val protobufVersion by extra("4.32.1")
+val grpcVersion by extra("1.78.0")
