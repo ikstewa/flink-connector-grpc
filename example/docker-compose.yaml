@@ -1,6 +1,6 @@
 services:
   jobmanager:
-    image: flink:2.0.0-java17
+    image: apache/flink:2.2.0-java17
     container_name: jobmanager
     ports:
       - "8081:8081"
@@ -17,7 +17,7 @@ services:
         jobmanager.rpc.address: jobmanager
 
   taskmanager:
-    image: flink:2.0.0-java17
+    image: apache/flink:2.2.0-java17
     container_name: taskmanager
     depends_on:
       jobmanager:
@@ -42,7 +42,7 @@ services:
       - ./src/main/resources/grpc_mock_config/:/opt/grpc_mock_config/
 
   sql-client:
-    image: flink:2.0.0-java17
+    image: apache/flink:2.2.0-java17
     container_name: sql-client
     command: bin/sql-client.sh
     depends_on:

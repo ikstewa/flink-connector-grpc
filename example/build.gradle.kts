@@ -30,6 +30,8 @@ spotless {
 // Gradle configuration for loading flink libs for docker build
 val flinkLib by configurations.creating
 val flinkVersion: String by rootProject.extra
+val protobufVersion: String by rootProject.extra
+val grpcVersion: String by rootProject.extra
 
 dependencies {
     implementation(platform("org.apache.logging.log4j:log4j-bom:2.25.3"))
@@ -47,8 +49,8 @@ dependencies {
 }
 
 protobuf {
-    protoc { artifact = "com.google.protobuf:protoc:3.25.8" }
-    plugins { create("grpc") { artifact = "io.grpc:protoc-gen-grpc-java:1.78.0" } }
+    protoc { artifact = "com.google.protobuf:protoc:$protobufVersion" }
+    plugins { create("grpc") { artifact = "io.grpc:protoc-gen-grpc-java:$grpcVersion" } }
     generateProtoTasks { ofSourceSet("main").forEach { it.plugins { create("grpc") {} } } }
 }
 
