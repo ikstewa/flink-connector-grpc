@@ -18,7 +18,7 @@ val flinkVersion: String by rootProject.extra
 
 dependencies {
     api(platform("org.apache.logging.log4j:log4j-bom:2.25.3"))
-    api(platform("io.grpc:grpc-bom:1.77.0"))
+    api(platform("io.grpc:grpc-bom:1.78.0"))
 
     implementation("com.google.code.findbugs:jsr305:3.0.2")
 
@@ -125,6 +125,6 @@ signing { sign(publishing.publications["mavenJava"]) }
 
 protobuf {
     protoc { artifact = "com.google.protobuf:protoc:3.25.8" }
-    plugins { create("grpc") { artifact = "io.grpc:protoc-gen-grpc-java:1.77.0" } }
+    plugins { create("grpc") { artifact = "io.grpc:protoc-gen-grpc-java:1.78.0" } }
     generateProtoTasks { ofSourceSet("test").forEach { it.plugins { create("grpc") {} } } }
 }
