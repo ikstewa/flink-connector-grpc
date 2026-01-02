@@ -40,4 +40,4 @@ nexusPublishing {
     }
 }
 
-val flinkVersion by extra("2.1.1")
+val flinkVersion by extra("2.2.0")
