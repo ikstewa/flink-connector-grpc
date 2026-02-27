@@ -27,7 +27,7 @@ dependencies {
     api(platform("io.grpc:grpc-bom:$grpcVersion"))
     api(platform("com.google.protobuf:protobuf-bom:$protobufVersion"))
 
-    implementation("org.pkl-lang:pkl-config-java:0.30.2")
+    implementation("org.pkl-lang:pkl-config-java:0.31.0")
 
     implementation("org.apache.logging.log4j:log4j-api")
 
