@@ -34,7 +34,7 @@ val protobufVersion: String by rootProject.extra
 val grpcVersion: String by rootProject.extra
 
 dependencies {
-    implementation(platform("org.apache.logging.log4j:log4j-bom:2.25.3"))
+    implementation(platform("org.apache.logging.log4j:log4j-bom:2.25.4"))
 
     implementation(project(":mock-rpc-server"))
     implementation("io.grpc:grpc-protobuf")
