@@ -23,7 +23,7 @@ val protobufVersion: String by rootProject.extra
 val grpcVersion: String by rootProject.extra
 
 dependencies {
-    api(platform("org.apache.logging.log4j:log4j-bom:2.25.3"))
+    api(platform("org.apache.logging.log4j:log4j-bom:2.25.4"))
     api(platform("io.grpc:grpc-bom:$grpcVersion"))
     api(platform("com.google.protobuf:protobuf-bom:$protobufVersion"))
 
