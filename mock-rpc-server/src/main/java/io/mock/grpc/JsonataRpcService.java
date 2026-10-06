@@ -18,9 +18,10 @@ package io.mock.grpc;
 import com.dashjoin.jsonata.Functions;
 import com.dashjoin.jsonata.Jsonata;
 import com.dashjoin.jsonata.json.Json;
+import com.google.protobuf.DescriptorProtos.FileDescriptorSet;
+import com.google.protobuf.Descriptors;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.google.protobuf.TypeRegistry;
 import com.google.protobuf.util.JsonFormat;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.Marshaller;
@@ -34,7 +35,9 @@ import io.mock.grpc.MockServer.JsonataErrorResponse;
 import io.mock.grpc.MockServer.JsonataResponse;
 import io.mock.grpc.MockServer.Service;
 import java.io.InputStream;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -44,21 +47,61 @@ class JsonataRpcService {
 
   private final ServerServiceDefinition serviceDef;
 
-  public JsonataRpcService(DescriptorSetSchema schema, Service config) {
-    this.serviceDef =
-        buildServiceDefinition(Objects.requireNonNull(schema), Objects.requireNonNull(config));
+  public JsonataRpcService(Service config, Map<String, Descriptors.ServiceDescriptor> services) {
+    this.serviceDef = buildServiceDefinition(Objects.requireNonNull(config), services);
   }
 
   public ServerServiceDefinition serviceDefinition() {
     return this.serviceDef;
   }
 
-  private static ServerServiceDefinition buildServiceDefinition(
-      DescriptorSetSchema schema, MockServer.Service serviceConfig) {
+  static Map<String, Descriptors.ServiceDescriptor> linkServices(FileDescriptorSet set) {
+    final Map<String, Descriptors.FileDescriptor> built = new HashMap<>();
+    final Map<String, Descriptors.ServiceDescriptor> services = new HashMap<>();
+    // protoc writes each file after the files it imports.
+    for (var proto : set.getFileList()) {
+      final var deps =
+          proto.getDependencyList().stream()
+              .map(
+                  dep ->
+                      Objects.requireNonNull(
+                          built.get(dep),
+                          () ->
+                              proto.getName()
+                                  + " imports "
+                                  + dep
+                                  + ", which is missing from the descriptor set"))
+              .toArray(Descriptors.FileDescriptor[]::new);
+      try {
+        final var file = Descriptors.FileDescriptor.buildFrom(proto, deps);
+        built.put(proto.getName(), file);
+        file.getServices().forEach(s -> services.put(s.getFullName(), s));
+      } catch (Descriptors.DescriptorValidationException e) {
+        throw new IllegalArgumentException(e);
+      }
+    }
+    return services;
+  }
 
-    final var method = schema.findUnaryMethod(serviceConfig.methodDescriptorSource);
-    final var registry = schema.typeRegistry();
+  private static Descriptors.MethodDescriptor findMethod(
+      Map<String, Descriptors.ServiceDescriptor> services, String fullMethodName) {
+    final var service = services.get(MethodDescriptor.extractFullServiceName(fullMethodName));
+    final var method =
+        service == null
+            ? null
+            : service.findMethodByName(MethodDescriptor.extractBareMethodName(fullMethodName));
+    if (method == null) {
+      throw new IllegalArgumentException("Method not found in descriptor set: " + fullMethodName);
+    }
+    return method;
+  }
 
+  private static <ReqT, RespT> ServerServiceDefinition buildServiceDefinition(
+      MockServer.Service serviceConfig, Map<String, Descriptors.ServiceDescriptor> services) {
+
+    final var method = findMethod(services, serviceConfig.methodDescriptorSource);
+
+    // Reubild the MethodDescriptor with wrapping JSON Marshaller
     final MethodDescriptor<String, String> jsonMethodDescriptor =
         io.grpc.MethodDescriptor.<String, String>newBuilder()
             .setType(MethodType.UNARY)
@@ -68,10 +111,10 @@ class JsonataRpcService {
             .setSampledToLocalTracing(true)
             .setRequestMarshaller(
                 new JsonWrappingMarshaller(
-                    DynamicMessage.getDefaultInstance(method.getInputType()), registry))
+                    DynamicMessage.getDefaultInstance(method.getInputType())))
             .setResponseMarshaller(
                 new JsonWrappingMarshaller(
-                    DynamicMessage.getDefaultInstance(method.getOutputType()), registry))
+                    DynamicMessage.getDefaultInstance(method.getOutputType())))
             .build();
 
     final io.grpc.ServiceDescriptor serviceDescriptor =
@@ -179,20 +222,16 @@ class JsonataRpcService {
 
     private final DynamicMessage prototype;
     private final Marshaller<DynamicMessage> protoMarsh;
-    private final JsonFormat.Parser parser;
-    private final JsonFormat.Printer printer;
 
-    public JsonWrappingMarshaller(DynamicMessage prototype, TypeRegistry registry) {
+    public JsonWrappingMarshaller(DynamicMessage prototype) {
       this.prototype = prototype;
       this.protoMarsh = ProtoUtils.marshaller(prototype);
-      this.parser = JsonFormat.parser().usingTypeRegistry(registry);
-      this.printer = JsonFormat.printer().usingTypeRegistry(registry).preservingProtoFieldNames();
     }
 
     public InputStream stream(String value) {
       try {
         final var builder = prototype.newBuilderForType();
-        parser.merge(value, builder);
+        JsonFormat.parser().merge(value, builder);
         return protoMarsh.stream(builder.build());
       } catch (Exception e) {
         throw new RuntimeException(e);
@@ -202,7 +241,7 @@ class JsonataRpcService {
     public String parse(InputStream stream) {
       final var msg = protoMarsh.parse(stream);
       try {
-        return printer.print(msg);
+        return JsonFormat.printer().preservingProtoFieldNames().print(msg);
       } catch (InvalidProtocolBufferException e) {
         throw new RuntimeException(e);
       }

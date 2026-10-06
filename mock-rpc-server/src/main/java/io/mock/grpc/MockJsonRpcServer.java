@@ -28,6 +28,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
@@ -40,7 +41,8 @@ import org.pkl.core.ModuleSource;
 public class MockJsonRpcServer {
   private static final Logger LOG = LogManager.getLogger(MockJsonRpcServer.class);
 
-  private ServerConfig config;
+  private MockServer config;
+  private FileDescriptorSet descriptors;
   private Server server;
   private final CountDownLatch shutdownSignal;
 
@@ -59,37 +61,38 @@ public class MockJsonRpcServer {
             });
   }
 
-  void start(@Nullable String pklFile, @Nullable String descriptorSetFile) throws IOException {
-    final ServerConfig serverConfig;
-    if (pklFile != null) {
-      if (descriptorSetFile == null) {
-        throw new IllegalArgumentException(
-            String.format("No descriptor set provided for config file '%s'", pklFile));
-      }
-      final MockServer mock;
+  void start(@Nullable String configFile) throws IOException {
+    final MockServer serverConfig;
+    final FileDescriptorSet serverDescriptors;
+    if (configFile != null) {
       try (var evaluator = ConfigEvaluator.preconfigured()) {
-        mock = evaluator.evaluate(ModuleSource.file(pklFile)).as(MockServer.class);
+        serverConfig = evaluator.evaluate(ModuleSource.file(configFile)).as(MockServer.class);
       }
-      final var descriptors =
-          FileDescriptorSet.parseFrom(Files.readAllBytes(Path.of(descriptorSetFile)));
-      serverConfig = new ServerConfig(mock, descriptors);
+      final var dir = Path.of(configFile).toAbsolutePath().getParent();
+      final List<Path> descFiles;
+      try (var paths = Files.list(dir)) {
+        descFiles = paths.filter(p -> p.toString().endsWith(".desc")).toList();
+      }
+      if (descFiles.size() != 1) {
+        throw new IOException(
+            String.format("Expected '%s' to contain one .desc file. Found: %s", dir, descFiles));
+      }
+      serverDescriptors = FileDescriptorSet.parseFrom(Files.readAllBytes(descFiles.get(0)));
     } else {
       serverConfig = null;
+      serverDescriptors = null;
     }
-    this.start(serverConfig);
+    this.start(serverConfig, serverDescriptors);
   }
 
-  synchronized void start(@Nullable ServerConfig targetConfig) throws IOException {
-    if (server != null && config.equals(targetConfig)) {
-      LOG.info("Config unchanged. Skipping restart...");
-      return;
-    }
-
-    // Link before shutting down so an invalid set leaves the running server untouched.
-    final var schema =
-        targetConfig != null ? DescriptorSetSchema.link(targetConfig.descriptors()) : null;
-
+  synchronized void start(
+      @Nullable MockServer targetConfig, @Nullable FileDescriptorSet targetDescriptors)
+      throws IOException {
     if (server != null) {
+      if (config.equals(targetConfig) && descriptors.equals(targetDescriptors)) {
+        LOG.info("Config file unchanged. Skipping restart...");
+        return;
+      }
       LOG.info("Shutting down Server...");
       try {
         server.shutdown().awaitTermination(30, TimeUnit.SECONDS);
@@ -101,18 +104,20 @@ public class MockJsonRpcServer {
     if (targetConfig != null) {
       try {
         config = targetConfig;
-        server = buildServer(targetConfig.mock(), schema);
+        descriptors = targetDescriptors;
+        server = buildServer(targetConfig, targetDescriptors);
         server.start();
         LOG.info(
             "Started server on port '{}' for services '{}'",
-            config.mock().port,
-            config.mock().services.stream().map(s -> s.name).toList());
+            config.port,
+            config.services.stream().map(s -> s.name).toList());
       } catch (RuntimeException e) {
         LOG.error("Failed starting server", e);
         this.shutdown();
       }
     } else {
       config = null;
+      descriptors = null;
       server = null;
     }
   }
@@ -133,7 +138,8 @@ public class MockJsonRpcServer {
     LOG.info("Server terminated");
   }
 
-  private static Server buildServer(MockServer config, DescriptorSetSchema schema) {
+  private static Server buildServer(MockServer config, FileDescriptorSet descriptors) {
+    final var services = JsonataRpcService.linkServices(descriptors);
     final var serverBldr =
         Grpc.newServerBuilderForPort(config.port, InsecureServerCredentials.create())
             /* This method call adds the Interceptor to enable compressed server responses for all RPCs */
@@ -149,7 +155,7 @@ public class MockJsonRpcServer {
                   }
                 });
     config.services.stream()
-        .map(s -> new JsonataRpcService(schema, s))
+        .map(s -> new JsonataRpcService(s, services))
         .map(JsonataRpcService::serviceDefinition)
         .forEach(serverBldr::addService);
     return serverBldr.build();
