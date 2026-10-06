@@ -22,6 +22,10 @@ import java.nio.file.Path;
 import java.nio.file.StandardWatchEventKinds;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import javax.annotation.Nullable;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -40,7 +44,7 @@ class ConfigWatcher {
   public void start() throws IOException, InterruptedException {
     if (!path.toFile().isDirectory()) {
       LOG.info("Direct config file provided. Not watching for changes.");
-      this.server.start(findConfigFile(path));
+      this.startServer();
     } else {
       LOG.info("Watching for config changes in '{}'", path);
 
@@ -55,7 +59,7 @@ class ConfigWatcher {
               () -> {
                 try {
                   try {
-                    this.server.start(findConfigFile(path));
+                    this.startServer();
                   } catch (Exception e) {
                     LOG.warn(
                         "Failed to start service with provided config. Waiting for updates...", e);
@@ -65,7 +69,7 @@ class ConfigWatcher {
                     // clear out events and search for new config
                     key.pollEvents();
                     try {
-                      this.server.start(findConfigFile(path));
+                      this.startServer();
                     } catch (Exception e) {
                       LOG.warn(
                           "Failed to start service with provided config. Waiting for updates...",
@@ -98,21 +102,53 @@ class ConfigWatcher {
     }
   }
 
-  private static String findConfigFile(Path path) throws IOException {
-    try (var paths = Files.walk(path)) {
-      final var files = paths.filter(Files::isRegularFile).toList();
-      if (files.size() == 1) {
-        final var configFile = files.iterator().next().toString();
-        LOG.info("Found config file '{}'", configFile);
-        return configFile;
-      } else if (files.size() > 1) {
-        throw new IOException(
-            String.format(
-                "Expected config dirctory to contain only a single file. Found: %s", files));
-      } else {
-        LOG.info("No config file found in dir '{}'. Waiting for config...", path);
-        return null;
+  private void startServer() throws IOException {
+    final var files = findConfigFiles(path);
+    this.server.start(Objects.toString(files.pkl(), null), Objects.toString(files.desc(), null));
+  }
+
+  record ConfigFiles(@Nullable Path pkl, @Nullable Path desc) {}
+
+  /**
+   * Finds the {@code .pkl} config and the {@code .desc} descriptor set, ignoring every other file.
+   * For a direct config file the descriptor set is the one in its parent directory.
+   */
+  static ConfigFiles findConfigFiles(Path path) throws IOException {
+    final boolean direct = !Files.isDirectory(path);
+    final var dir = direct ? path.toAbsolutePath().getParent() : path;
+
+    final List<Path> pkls = new ArrayList<>();
+    final List<Path> descs = new ArrayList<>();
+    try (var paths = Files.list(dir)) {
+      for (var file : paths.filter(Files::isRegularFile).toList()) {
+        final var name = file.getFileName().toString();
+        if (name.endsWith(".pkl")) {
+          pkls.add(file);
+        } else if (name.endsWith(".desc")) {
+          descs.add(file);
+        }
       }
     }
+
+    if (direct) {
+      pkls.clear();
+      pkls.add(path);
+    }
+    if (pkls.size() > 1 || descs.size() > 1) {
+      throw new IOException(
+          String.format(
+              "Expected '%s' to contain one .pkl and one .desc file. Found: %s %s",
+              dir, pkls, descs));
+    }
+    if (pkls.isEmpty()) {
+      LOG.info("No config file found in dir '{}'. Waiting for config...", dir);
+      return new ConfigFiles(null, null);
+    }
+    if (descs.isEmpty()) {
+      throw new IOException(
+          String.format("Config file '%s' has no .desc descriptor set beside it", pkls.get(0)));
+    }
+    LOG.info("Found config file '{}' and descriptor set '{}'", pkls.get(0), descs.get(0));
+    return new ConfigFiles(pkls.get(0), descs.get(0));
   }
 }

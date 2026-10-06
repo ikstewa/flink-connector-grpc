@@ -15,6 +15,7 @@
 //
 package io.mock.grpc;
 
+import com.google.protobuf.DescriptorProtos.FileDescriptorSet;
 import io.grpc.Grpc;
 import io.grpc.InsecureServerCredentials;
 import io.grpc.Metadata;
@@ -25,6 +26,8 @@ import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
@@ -37,7 +40,7 @@ import org.pkl.core.ModuleSource;
 public class MockJsonRpcServer {
   private static final Logger LOG = LogManager.getLogger(MockJsonRpcServer.class);
 
-  private MockServer config;
+  private ServerConfig config;
   private Server server;
   private final CountDownLatch shutdownSignal;
 
@@ -56,24 +59,37 @@ public class MockJsonRpcServer {
             });
   }
 
-  void start(@Nullable String configFile) throws IOException {
-    final MockServer serverConfig;
-    if (configFile != null) {
-      try (var evaluator = ConfigEvaluator.preconfigured()) {
-        serverConfig = evaluator.evaluate(ModuleSource.file(configFile)).as(MockServer.class);
+  void start(@Nullable String pklFile, @Nullable String descriptorSetFile) throws IOException {
+    final ServerConfig serverConfig;
+    if (pklFile != null) {
+      if (descriptorSetFile == null) {
+        throw new IllegalArgumentException(
+            String.format("No descriptor set provided for config file '%s'", pklFile));
       }
+      final MockServer mock;
+      try (var evaluator = ConfigEvaluator.preconfigured()) {
+        mock = evaluator.evaluate(ModuleSource.file(pklFile)).as(MockServer.class);
+      }
+      final var descriptors =
+          FileDescriptorSet.parseFrom(Files.readAllBytes(Path.of(descriptorSetFile)));
+      serverConfig = new ServerConfig(mock, descriptors);
     } else {
       serverConfig = null;
     }
     this.start(serverConfig);
   }
 
-  synchronized void start(@Nullable MockServer targetConfig) throws IOException {
+  synchronized void start(@Nullable ServerConfig targetConfig) throws IOException {
+    if (server != null && config.equals(targetConfig)) {
+      LOG.info("Config unchanged. Skipping restart...");
+      return;
+    }
+
+    // Link before shutting down so an invalid set leaves the running server untouched.
+    final var schema =
+        targetConfig != null ? DescriptorSetSchema.link(targetConfig.descriptors()) : null;
+
     if (server != null) {
-      if (config.equals(targetConfig)) {
-        LOG.info("Config file unchanged. Skipping restart...");
-        return;
-      }
       LOG.info("Shutting down Server...");
       try {
         server.shutdown().awaitTermination(30, TimeUnit.SECONDS);
@@ -85,12 +101,12 @@ public class MockJsonRpcServer {
     if (targetConfig != null) {
       try {
         config = targetConfig;
-        server = buildServer(targetConfig);
+        server = buildServer(targetConfig.mock(), schema);
         server.start();
         LOG.info(
             "Started server on port '{}' for services '{}'",
-            config.port,
-            config.services.stream().map(s -> s.name).toList());
+            config.mock().port,
+            config.mock().services.stream().map(s -> s.name).toList());
       } catch (RuntimeException e) {
         LOG.error("Failed starting server", e);
         this.shutdown();
@@ -117,7 +133,7 @@ public class MockJsonRpcServer {
     LOG.info("Server terminated");
   }
 
-  private static Server buildServer(MockServer config) {
+  private static Server buildServer(MockServer config, DescriptorSetSchema schema) {
     final var serverBldr =
         Grpc.newServerBuilderForPort(config.port, InsecureServerCredentials.create())
             /* This method call adds the Interceptor to enable compressed server responses for all RPCs */
@@ -133,7 +149,7 @@ public class MockJsonRpcServer {
                   }
                 });
     config.services.stream()
-        .map(JsonataRpcService::new)
+        .map(s -> new JsonataRpcService(schema, s))
         .map(JsonataRpcService::serviceDefinition)
         .forEach(serverBldr::addService);
     return serverBldr.build();

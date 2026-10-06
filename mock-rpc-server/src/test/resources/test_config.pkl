@@ -5,6 +5,6 @@ port = 50055
 services {
   new {
     name = "SayHello"
-    methodDescriptorSource = "io.grpc.examples.helloworld.GreeterGrpc#getSayHelloMethod"
+    methodDescriptorSource = "helloworld.Greeter/SayHello"
   }
 }

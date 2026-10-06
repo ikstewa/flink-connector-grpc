@@ -22,6 +22,8 @@ val flinkVersion: String by rootProject.extra
 val protobufVersion: String by rootProject.extra
 val grpcVersion: String by rootProject.extra
 
+val testDescriptorSet = layout.buildDirectory.file("generated/descriptors/test/descriptor_set.desc")
+
 dependencies {
     api(platform("org.apache.logging.log4j:log4j-bom:2.25.3"))
     api(platform("io.grpc:grpc-bom:$grpcVersion"))
@@ -76,6 +78,7 @@ testing {
 }
 
 tasks.test {
+    systemProperty("test.descriptor.set", testDescriptorSet.get().asFile.path)
     finalizedBy(tasks.jacocoTestReport) // report is always generated after tests run
 }
 
@@ -144,5 +147,12 @@ signing { sign(publishing.publications["mavenJava"]) }
 protobuf {
     protoc { artifact = "com.google.protobuf:protoc:$protobufVersion" }
     plugins { create("grpc") { artifact = "io.grpc:protoc-gen-grpc-java:$grpcVersion" } }
-    generateProtoTasks { ofSourceSet("test").forEach { it.plugins { create("grpc") {} } } }
+    generateProtoTasks {
+        ofSourceSet("test").forEach {
+            it.plugins { create("grpc") {} }
+            it.generateDescriptorSet = true
+            it.descriptorSetOptions.includeImports = true
+            it.descriptorSetOptions.path = testDescriptorSet.get().asFile.path
+        }
+    }
 }
