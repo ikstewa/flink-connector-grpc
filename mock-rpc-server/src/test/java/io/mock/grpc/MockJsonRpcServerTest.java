@@ -52,8 +52,12 @@ class MockJsonRpcServerTest {
 
   @AfterEach
   void shutdown() throws InterruptedException {
-    this.server.shutdown();
-    this.clientChannel.shutdownNow();
+    if (this.server != null) {
+      this.server.shutdown();
+    }
+    if (this.clientChannel != null) {
+      this.clientChannel.shutdownNow();
+    }
   }
 
   @Test
@@ -276,6 +280,32 @@ class MockJsonRpcServerTest {
         GreeterGrpc.newBlockingStub(this.clientChannel)
             .sayHello(HelloRequest.newBuilder().setName("Random guy").build());
     Truth.assertThat(response.getMessage()).isEqualTo("Hello from file...");
+  }
+
+  @Test
+  @DisplayName("Method missing from the descriptor set is rejected")
+  void test_unknown_method() {
+    final var service =
+        parseConfig(ModuleSource.text("amends \"modulepath:/test_config.pkl\""))
+            .services
+            .get(0)
+            .withMethodDescriptorSource("helloworld.Greeter/NoSuchMethod");
+    final var linked = JsonataRpcService.linkServices(descriptors);
+
+    final var e =
+        Assertions.assertThrows(
+            IllegalArgumentException.class, () -> new JsonataRpcService(service, linked));
+    Truth.assertThat(e).hasMessageThat().contains("helloworld.Greeter/NoSuchMethod");
+  }
+
+  @Test
+  @DisplayName("Config file without a descriptor set beside it fails")
+  void test_config_file_without_descriptor_set(@TempDir Path dir) throws Exception {
+    final var pkl = dir.resolve("config.pkl");
+    Files.writeString(pkl, "amends \"modulepath:/test_config.pkl\"");
+
+    Assertions.assertThrows(
+        IOException.class, () -> new ConfigWatcher(new MockJsonRpcServer(), pkl).start());
   }
 
   ManagedChannel startServer(ModuleSource cfgSource) {
