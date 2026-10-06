@@ -15,6 +15,7 @@
 //
 package io.mock.grpc;
 
+import com.google.protobuf.DescriptorProtos.FileDescriptorSet;
 import io.grpc.Grpc;
 import io.grpc.InsecureServerCredentials;
 import io.grpc.Metadata;
@@ -25,6 +26,8 @@ import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
@@ -38,6 +41,7 @@ public class MockJsonRpcServer {
   private static final Logger LOG = LogManager.getLogger(MockJsonRpcServer.class);
 
   private MockServer config;
+  private FileDescriptorSet descriptors;
   private Server server;
   private final CountDownLatch shutdownSignal;
 
@@ -58,19 +62,26 @@ public class MockJsonRpcServer {
 
   void start(@Nullable String configFile) throws IOException {
     final MockServer serverConfig;
+    final FileDescriptorSet serverDescriptors;
     if (configFile != null) {
       try (var evaluator = ConfigEvaluator.preconfigured()) {
         serverConfig = evaluator.evaluate(ModuleSource.file(configFile)).as(MockServer.class);
       }
+      serverDescriptors =
+          FileDescriptorSet.parseFrom(
+              Files.readAllBytes(Path.of(configFile).resolveSibling("descriptor_set.desc")));
     } else {
       serverConfig = null;
+      serverDescriptors = null;
     }
-    this.start(serverConfig);
+    this.start(serverConfig, serverDescriptors);
   }
 
-  synchronized void start(@Nullable MockServer targetConfig) throws IOException {
+  synchronized void start(
+      @Nullable MockServer targetConfig, @Nullable FileDescriptorSet targetDescriptors)
+      throws IOException {
     if (server != null) {
-      if (config.equals(targetConfig)) {
+      if (config.equals(targetConfig) && descriptors.equals(targetDescriptors)) {
         LOG.info("Config file unchanged. Skipping restart...");
         return;
       }
@@ -85,7 +96,8 @@ public class MockJsonRpcServer {
     if (targetConfig != null) {
       try {
         config = targetConfig;
-        server = buildServer(targetConfig);
+        descriptors = targetDescriptors;
+        server = buildServer(targetConfig, targetDescriptors);
         server.start();
         LOG.info(
             "Started server on port '{}' for services '{}'",
@@ -97,6 +109,7 @@ public class MockJsonRpcServer {
       }
     } else {
       config = null;
+      descriptors = null;
       server = null;
     }
   }
@@ -117,7 +130,8 @@ public class MockJsonRpcServer {
     LOG.info("Server terminated");
   }
 
-  private static Server buildServer(MockServer config) {
+  private static Server buildServer(MockServer config, FileDescriptorSet descriptors) {
+    final var services = JsonataRpcService.linkServices(descriptors);
     final var serverBldr =
         Grpc.newServerBuilderForPort(config.port, InsecureServerCredentials.create())
             /* This method call adds the Interceptor to enable compressed server responses for all RPCs */
@@ -133,7 +147,7 @@ public class MockJsonRpcServer {
                   }
                 });
     config.services.stream()
-        .map(JsonataRpcService::new)
+        .map(s -> new JsonataRpcService(s, services))
         .map(JsonataRpcService::serviceDefinition)
         .forEach(serverBldr::addService);
     return serverBldr.build();

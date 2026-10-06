@@ -100,7 +100,8 @@ class ConfigWatcher {
 
   private static String findConfigFile(Path path) throws IOException {
     try (var paths = Files.walk(path)) {
-      final var files = paths.filter(Files::isRegularFile).toList();
+      final var files =
+          paths.filter(Files::isRegularFile).filter(p -> p.toString().endsWith(".pkl")).toList();
       if (files.size() == 1) {
         final var configFile = files.iterator().next().toString();
         LOG.info("Found config file '{}'", configFile);
@@ -108,7 +109,7 @@ class ConfigWatcher {
       } else if (files.size() > 1) {
         throw new IOException(
             String.format(
-                "Expected config dirctory to contain only a single file. Found: %s", files));
+                "Expected config dirctory to contain only a single .pkl file. Found: %s", files));
       } else {
         LOG.info("No config file found in dir '{}'. Waiting for config...", path);
         return null;
