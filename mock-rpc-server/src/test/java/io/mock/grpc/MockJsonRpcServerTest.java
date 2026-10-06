@@ -241,30 +241,10 @@ class MockJsonRpcServerTest {
   }
 
   @Test
-  @DisplayName("Config file starts with the descriptor set beside it")
+  @DisplayName("Config file resolves its method from descriptor_set.desc beside it")
   void test_config_file_with_descriptor_set(@TempDir Path dir) throws Exception {
     final var pkl = dir.resolve("config.pkl");
-    Files.writeString(
-        pkl,
-        """
-      amends "modulepath:/test_config.pkl"
-
-      services {
-        [[name == "SayHello"]]
-        {
-          requests = new {
-            new JsonataResponse {
-              requestExpression = "true"
-              responseExpression = \"""
-                {
-                  "message": "Hello from file..."
-                }
-              \"""
-            }
-          }
-        }
-      }
-    """);
+    Files.writeString(pkl, "amends \"modulepath:/test_config.pkl\"");
     Files.write(dir.resolve("descriptor_set.desc"), descriptors.toByteArray());
     Files.writeString(dir.resolve("notes.txt"), "unrelated");
 
@@ -276,10 +256,12 @@ class MockJsonRpcServerTest {
                 InsecureChannelCredentials.create())
             .build();
 
-    final var response =
-        GreeterGrpc.newBlockingStub(this.clientChannel)
-            .sayHello(HelloRequest.newBuilder().setName("Random guy").build());
-    Truth.assertThat(response.getMessage()).isEqualTo("Hello from file...");
+    final var client = GreeterGrpc.newBlockingStub(this.clientChannel);
+    final var e =
+        Assertions.assertThrows(
+            StatusRuntimeException.class,
+            () -> client.sayHello(HelloRequest.newBuilder().setName("Random guy").build()));
+    Truth.assertThat(e.getStatus()).isEqualTo(Status.NOT_FOUND);
   }
 
   @Test

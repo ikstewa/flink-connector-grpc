@@ -62,15 +62,7 @@ class JsonataRpcService {
     for (var proto : set.getFileList()) {
       final var deps =
           proto.getDependencyList().stream()
-              .map(
-                  dep ->
-                      Objects.requireNonNull(
-                          built.get(dep),
-                          () ->
-                              proto.getName()
-                                  + " imports "
-                                  + dep
-                                  + ", which is missing from the descriptor set"))
+              .map(dep -> Objects.requireNonNull(built.get(dep), dep))
               .toArray(Descriptors.FileDescriptor[]::new);
       try {
         final var file = Descriptors.FileDescriptor.buildFrom(proto, deps);

@@ -11,7 +11,7 @@ class Service {
   name: String
 
   /// The full name of the unary gRPC method to mock, `package.Service/Method`.
-  /// Resolved from the `.desc` FileDescriptorSet beside the config file.
+  /// Resolved from the `descriptor_set.desc` FileDescriptorSet beside the config file.
   /// Example: 'helloworld.Greeter/SayHello'.
   methodDescriptorSource : String
 

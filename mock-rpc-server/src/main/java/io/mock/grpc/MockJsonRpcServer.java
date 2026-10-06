@@ -28,7 +28,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
@@ -68,16 +67,9 @@ public class MockJsonRpcServer {
       try (var evaluator = ConfigEvaluator.preconfigured()) {
         serverConfig = evaluator.evaluate(ModuleSource.file(configFile)).as(MockServer.class);
       }
-      final var dir = Path.of(configFile).toAbsolutePath().getParent();
-      final List<Path> descFiles;
-      try (var paths = Files.list(dir)) {
-        descFiles = paths.filter(p -> p.toString().endsWith(".desc")).toList();
-      }
-      if (descFiles.size() != 1) {
-        throw new IOException(
-            String.format("Expected '%s' to contain one .desc file. Found: %s", dir, descFiles));
-      }
-      serverDescriptors = FileDescriptorSet.parseFrom(Files.readAllBytes(descFiles.get(0)));
+      serverDescriptors =
+          FileDescriptorSet.parseFrom(
+              Files.readAllBytes(Path.of(configFile).resolveSibling("descriptor_set.desc")));
     } else {
       serverConfig = null;
       serverDescriptors = null;
